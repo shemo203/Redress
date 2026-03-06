@@ -29,6 +29,7 @@
 
 Migration added in Q2:
 - `supabase/migrations/20260305000100_q2_core_schema.sql`
+- `supabase/migrations/20260306000100_q4_storage_videos_bucket.sql`
 
 If you are using Supabase SQL Editor instead of CLI:
 1. Open the migration file.
@@ -53,14 +54,39 @@ If you are using Supabase SQL Editor instead of CLI:
 
 Google is optional in Q3 completion; email/password auth is required.
 
+## Storage Setup (Q4)
+Q4 upload uses a public Supabase Storage bucket named `videos`.
+
+### Via migration (recommended)
+1. Ensure the Q4 migration is present:
+   - `supabase/migrations/20260306000100_q4_storage_videos_bucket.sql`
+2. Apply migrations:
+   - `supabase db push`
+
+This migration:
+- creates bucket `videos` as public
+- allows public read from `videos`
+- allows authenticated users to insert/update/delete only within their own top-level folder prefix (`auth.uid()/...`)
+
+### Via Supabase Dashboard (manual fallback)
+1. Storage -> Create bucket -> name `videos`.
+2. Mark bucket as `Public bucket`.
+3. Add object policies equivalent to migration:
+   - Public `SELECT` for bucket `videos`
+   - Authenticated `INSERT/UPDATE/DELETE` limited to objects whose first folder matches `auth.uid()`
+
+Upload path used by app:
+- `userId/postId/timestamp.ext`
+
 ## Boot Check
 - Signed-out users should be redirected to sign-in.
 - Sign-up should require both checkboxes: `I'm 13+` and `Terms & Privacy`.
 - After login, the app should route to authenticated screens.
 - Account screen should show user id, email, username, and support sign-out.
 - Sign-out should return to auth screens.
+- Upload screen should allow selecting a video, uploading to Storage, creating a `video_posts` draft row, and playing preview from stored URL.
 
 ## Notes
 - Only `EXPO_PUBLIC_*` variables are exposed to the client bundle.
 - Keep real secrets out of git. Commit `.env.example`, not `.env`.
-- Q1 delivered the placeholder app shell; Q2 added DB migrations and RLS; Q3 added auth gate + profile upsert flow.
+- Q1 delivered the placeholder app shell; Q2 added DB migrations and RLS; Q3 added auth gate + profile upsert flow; Q4 added video upload + draft creation.

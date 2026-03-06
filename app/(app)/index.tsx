@@ -12,6 +12,9 @@ export default function AppHomeScreen() {
       <Text style={styles.copy}>You are signed in.</Text>
       <Text style={styles.copy}>User ID: {user?.id ?? "-"}</Text>
       <Text style={styles.copy}>Username: {profile?.username ?? "-"}</Text>
+      <Link href="/(app)/upload" style={styles.link}>
+        Go to Upload
+      </Link>
       <Link href="/(app)/account" style={styles.link}>
         Go to Account
       </Link>
