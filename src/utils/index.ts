@@ -1,1 +1,1 @@
-export {};
+export { validateClothingTagUrl } from "./urlValidation";

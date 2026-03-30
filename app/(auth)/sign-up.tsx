@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import * as Linking from "expo-linking";
 
-import { PRIVACY_URL, TERMS_URL } from "../../src/constants";
+import { PRIVACY_URL, TERMS_URL, theme } from "../../src/constants";
 import { supabase } from "../../src/lib/supabaseClient";
 
 export default function SignUpScreen() {
@@ -135,6 +135,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   checkbox: {
+    color: theme.color.accent,
     fontWeight: "700",
     width: 30,
   },
@@ -144,21 +145,24 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   container: {
+    backgroundColor: theme.color.bg,
     flex: 1,
     gap: 10,
     padding: 20,
   },
   disabledButton: {
-    backgroundColor: "#9ab7f8",
+    backgroundColor: "#cc9b95",
   },
   input: {
-    backgroundColor: "#fff",
-    borderColor: "#ccc",
-    borderRadius: 10,
+    backgroundColor: theme.color.bgPanel,
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
+    color: theme.color.ink,
     padding: 12,
   },
   label: {
+    color: theme.color.ink,
     fontWeight: "600",
     marginTop: 4,
   },
@@ -170,21 +174,24 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   linkText: {
-    color: "#0f62fe",
+    color: theme.color.accent,
     fontWeight: "600",
   },
   primaryButton: {
-    backgroundColor: "#0f62fe",
+    backgroundColor: theme.color.accent,
   },
   primaryButtonText: {
     color: "#fff",
     fontWeight: "700",
   },
   statusText: {
+    color: theme.color.ink,
     marginTop: 6,
   },
   title: {
-    fontSize: 28,
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 34,
     fontWeight: "700",
     marginBottom: 8,
   },

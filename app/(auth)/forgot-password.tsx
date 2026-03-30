@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import * as Linking from "expo-linking";
 
+import { theme } from "../../src/constants";
 import { supabase } from "../../src/lib/supabaseClient";
 
 export default function ForgotPasswordScreen() {
@@ -63,8 +64,8 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   button: {
     alignItems: "center",
-    backgroundColor: "#0f62fe",
-    borderRadius: 10,
+    backgroundColor: theme.color.accent,
+    borderRadius: theme.radius.pill,
     marginTop: 12,
     paddingVertical: 14,
   },
@@ -73,26 +74,31 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   container: {
+    backgroundColor: theme.color.bg,
     flex: 1,
     gap: 10,
     padding: 20,
   },
   copy: {
-    color: "#5f5f5f",
+    color: theme.color.muted,
     fontSize: 15,
   },
   input: {
-    backgroundColor: "#fff",
-    borderColor: "#ccc",
-    borderRadius: 10,
+    backgroundColor: theme.color.bgPanel,
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
+    color: theme.color.ink,
     padding: 12,
   },
   statusText: {
+    color: theme.color.ink,
     marginTop: 4,
   },
   title: {
-    fontSize: 28,
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 34,
     fontWeight: "700",
     marginBottom: 8,
   },

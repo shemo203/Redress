@@ -6,6 +6,7 @@ import * as Linking from "expo-linking";
 import {
   googleAuthRedirectUrl,
   isGoogleAuthConfigured,
+  theme,
 } from "../../src/constants";
 import { supabase } from "../../src/lib/supabaseClient";
 
@@ -124,22 +125,25 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   container: {
+    backgroundColor: theme.color.bg,
     flex: 1,
     gap: 10,
     padding: 20,
   },
   errorText: {
-    color: "#b00020",
+    color: theme.color.danger,
     marginTop: 4,
   },
   input: {
-    backgroundColor: "#fff",
-    borderColor: "#ccc",
-    borderRadius: 10,
+    backgroundColor: theme.color.bgPanel,
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
+    color: theme.color.ink,
     padding: 12,
   },
   label: {
+    color: theme.color.ink,
     fontWeight: "600",
     marginTop: 4,
   },
@@ -150,11 +154,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   linkText: {
-    color: "#0f62fe",
+    color: theme.color.accent,
     fontWeight: "600",
   },
   primaryButton: {
-    backgroundColor: "#0f62fe",
+    backgroundColor: theme.color.accent,
     marginTop: 8,
   },
   primaryButtonText: {
@@ -162,14 +166,16 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   secondaryButton: {
-    backgroundColor: "#eef4ff",
+    backgroundColor: theme.color.accentSoft,
   },
   secondaryButtonText: {
-    color: "#0f62fe",
+    color: theme.color.accent,
     fontWeight: "700",
   },
   title: {
-    fontSize: 28,
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 34,
     fontWeight: "700",
     marginBottom: 8,
   },

@@ -1,8 +1,17 @@
 import * as ImagePicker from "expo-image-picker";
+import { Link } from "expo-router";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
+import { theme } from "../../src/constants";
 import { useAuth } from "../../src/features/auth";
 import { supabase } from "../../src/lib/supabaseClient";
 
@@ -173,7 +182,7 @@ export default function UploadScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Upload video</Text>
       <Text style={styles.copy}>
         Pick a video from your library. This creates a draft post.
@@ -222,6 +231,9 @@ export default function UploadScreen() {
           <Text style={styles.successTitle}>Draft created</Text>
           <Text style={styles.meta}>Post ID: {draftPostId}</Text>
           <Text style={styles.meta}>Video URL: {uploadedVideoUrl}</Text>
+          <Link href={`/(app)/draft/${draftPostId}`} style={styles.linkText}>
+            Open Draft Post
+          </Link>
         </View>
       ) : null}
 
@@ -233,56 +245,69 @@ export default function UploadScreen() {
           nativeControls
         />
       ) : null}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
     alignItems: "center",
-    borderRadius: 10,
+    borderRadius: theme.radius.pill,
     marginTop: 10,
     paddingVertical: 12,
+    ...theme.shadow.card,
   },
   buttonText: {
-    color: "#fff",
+    color: theme.color.white,
     fontWeight: "700",
   },
   container: {
-    flex: 1,
+    backgroundColor: theme.color.bg,
+    flexGrow: 1,
     padding: 16,
   },
   copy: {
-    color: "#555",
+    color: theme.color.muted,
     marginBottom: 8,
   },
   disabledButton: {
-    backgroundColor: "#94b5f2",
+    backgroundColor: "#cc9b95",
   },
   input: {
-    borderColor: "#ccc",
-    borderRadius: 10,
+    backgroundColor: theme.color.bgPanel,
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
+    color: theme.color.ink,
     padding: 12,
   },
   label: {
+    color: theme.color.ink,
     fontWeight: "600",
     marginBottom: 6,
     marginTop: 8,
   },
+  linkText: {
+    color: theme.color.accent,
+    fontSize: 14,
+    fontWeight: "700",
+    marginTop: 10,
+  },
   meta: {
-    color: "#303030",
+    color: theme.color.ink,
     fontSize: 12,
   },
   metaWrap: {
-    backgroundColor: "#f3f3f3",
-    borderRadius: 8,
+    backgroundColor: theme.color.bgPanel,
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
     gap: 4,
     marginTop: 10,
     padding: 10,
   },
   pickButton: {
-    backgroundColor: "#5c5c5c",
+    backgroundColor: "#8f7d70",
   },
   preview: {
     backgroundColor: "#000",
@@ -292,25 +317,31 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   status: {
+    color: theme.color.ink,
     marginTop: 10,
   },
   successTitle: {
+    color: theme.color.ink,
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 4,
   },
   successWrap: {
-    backgroundColor: "#edf7ee",
-    borderRadius: 8,
+    backgroundColor: theme.color.bgPanel,
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
     marginTop: 12,
     padding: 10,
   },
   title: {
-    fontSize: 28,
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 34,
     fontWeight: "700",
     marginBottom: 8,
   },
   uploadButton: {
-    backgroundColor: "#0f62fe",
+    backgroundColor: theme.color.accent,
   },
 });

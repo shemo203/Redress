@@ -11,6 +11,19 @@ Reject creator-entered URLs that are:
 - are obviously malformed
 Optionally: maintain a blocked-domain list.
 
+### Implemented URL validation rules (Q5 tag CRUD)
+For `clothing_tags.url`, the client validation now enforces:
+- Trim whitespace before validation and save.
+- URL is required (empty string is rejected).
+- Reject if the trimmed value starts with any blocked scheme:
+  - `javascript:`
+  - `data:`
+  - `file:`
+  - `blob:`
+- Parse with URL parser; reject malformed values.
+- Accept only `http://` or `https://` protocol.
+- Save the trimmed normalized value only after all checks pass.
+
 ## Abuse controls
 - One grade per user per post (unique + RLS)
 - Rate limiting (MVP: client throttling + server checks where feasible)

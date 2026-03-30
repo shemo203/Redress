@@ -106,15 +106,15 @@ Source of truth: docs/10_PRODUCT.md (summary) and docs/11_PRD_FULL.md (full PRD)
 
 ---
 
-## Q6 — Publish flow (RPC)
-**Goal:** Publishing is atomic and enforces tags required.
-**Tasks:**
-- “Publish” button calls `publish_post(post_id)`.
-- Handle failure reasons gracefully (no tags, not owner, etc).
+  ## Q6 — Publish flow (RPC)
+  **Goal:** Publishing is atomic and enforces tags required.
+  **Tasks:**
+  - “Publish” button calls `publish_post(post_id)`.
+  - Handle failure reasons gracefully (no tags, not owner, etc).
 
-**Done when:**
-- Cannot publish with 0 tags.
-- Published posts appear in “published feed query”.
+  **Done when:**
+  - Cannot publish with 0 tags.
+  - Published posts appear in “published feed query”.
 
 ---
 

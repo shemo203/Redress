@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { theme } from "../../src/constants";
 import { useAuth } from "../../src/features/auth";
 import { supabase } from "../../src/lib/supabaseClient";
 
@@ -24,17 +25,19 @@ export default function AccountScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.heading}>Account</Text>
 
-      <Text style={styles.label}>User ID</Text>
-      <Text style={styles.value}>{user?.id ?? "-"}</Text>
+      <View style={styles.card}>
+        <Text style={styles.label}>User ID</Text>
+        <Text style={styles.value}>{user?.id ?? "-"}</Text>
 
-      <Text style={styles.label}>Email</Text>
-      <Text style={styles.value}>{user?.email ?? "-"}</Text>
+        <Text style={styles.label}>Email</Text>
+        <Text style={styles.value}>{user?.email ?? "-"}</Text>
 
-      <Text style={styles.label}>Username</Text>
-      <Text style={styles.value}>{profile?.username ?? "-"}</Text>
+        <Text style={styles.label}>Username</Text>
+        <Text style={styles.value}>{profile?.username ?? "-"}</Text>
+      </View>
 
       <Pressable
         disabled={isSubmitting}
@@ -47,40 +50,52 @@ export default function AccountScreen() {
       </Pressable>
 
       {statusMessage ? <Text style={styles.status}>{statusMessage}</Text> : null}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
     alignItems: "center",
-    backgroundColor: "#1f1f1f",
-    borderRadius: 10,
+    backgroundColor: theme.color.accent,
+    borderRadius: theme.radius.pill,
     marginTop: 18,
-    paddingVertical: 12,
+    paddingVertical: 13,
   },
   buttonText: {
-    color: "#fff",
+    color: theme.color.white,
     fontWeight: "700",
   },
+  card: {
+    backgroundColor: theme.color.bgPanel,
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    padding: theme.spacing.md,
+  },
   container: {
-    flex: 1,
-    padding: 20,
+    backgroundColor: theme.color.bg,
+    flexGrow: 1,
+    padding: theme.spacing.lg,
   },
   heading: {
-    fontSize: 28,
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 34,
     fontWeight: "700",
     marginBottom: 16,
   },
   label: {
-    color: "#555",
+    color: theme.color.muted,
     fontSize: 13,
     marginTop: 8,
   },
   status: {
+    color: theme.color.ink,
     marginTop: 10,
   },
   value: {
+    color: theme.color.ink,
     fontSize: 16,
     fontWeight: "600",
   },

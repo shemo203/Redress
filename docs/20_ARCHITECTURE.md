@@ -42,3 +42,12 @@ src/
 - `links`: link validation and outbound behavior.
 - `analytics`: outbound click logging.
 - `reports`: user reporting flows.
+
+## Feed Query Strategy (Q7)
+- Main feed reads `video_posts` with `status='published'`, ordered by `created_at desc`.
+- Client pagination uses simple limit/offset (`range(from, to)` in Supabase JS).
+- Feed UI uses vertical paging (`FlatList` with one-post-per-screen behavior).
+- Performance approach:
+  - Keep list window small (`windowSize`, batch limits).
+  - Mount video players only for active and nearby items (current ±1).
+- Reveal items sheet reads tags already attached to each feed post row and opens only safe `http/https` links.
