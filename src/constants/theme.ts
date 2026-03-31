@@ -1,13 +1,19 @@
 export const theme = {
   color: {
     accent: "#d94b40",
+    accentBright: "#ea2f23",
     accentSoft: "#f7ddd9",
     bg: "#e7e0d7",
     bgPanel: "#f3efea",
     border: "#d8cec2",
     danger: "#b84036",
+    glass: "rgba(255, 249, 243, 0.88)",
     ink: "#2f2a26",
+    inkSoft: "#8c786e",
     muted: "#7b6f64",
+    navGlow: "#f4dfda",
+    sand: "#e8ddd0",
+    shell: "#f7f1ea",
     white: "#ffffff",
   },
   radius: {

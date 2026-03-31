@@ -15,7 +15,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { VideoView, useVideoPlayer } from "expo-video";
 
 import { theme } from "../../src/constants";
+import {
+  logOutboundClickBestEffort,
+  shouldLogOutboundClick,
+} from "../../src/features/analytics";
 import { useAuth } from "../../src/features/auth";
+import {
+  buildLinkReportDetails,
+  ReportComposer,
+  submitReport,
+  type ReportTargetType,
+} from "../../src/features/reports";
 import { supabase } from "../../src/lib/supabaseClient";
 import { validateClothingTagUrl } from "../../src/utils";
 
@@ -39,30 +49,59 @@ type FeedPost = {
   video_url: string;
 };
 
+type ReportDraft = {
+  initialDetails?: string;
+  subtitle: string;
+  targetId: string;
+  targetType: ReportTargetType;
+  title: string;
+};
+
 type FeedVideoCardProps = {
   active: boolean;
   avgGradeText: string;
+  captionExpanded: boolean;
   gradeLocked: boolean;
-  gradeMessage: string | null;
-  gradeSubmitting: boolean;
-  onGradePress: (value: number) => void;
   height: number;
+  onOpenGradeSheet: () => void;
+  onReportPost: () => void;
+  onReportProfile: () => void;
   onRevealItems: () => void;
+  onToggleCaption: () => void;
   post: FeedPost;
   shouldMountVideo: boolean;
   topInset: number;
   userGrade: number | null;
 };
 
+function getCaptionPreview(caption: string) {
+  const fallback = "Fresh fit, no caption yet.";
+  const source = caption.trim().length > 0 ? caption.trim() : fallback;
+
+  if (source.length <= 88) {
+    return {
+      text: source,
+      truncated: false,
+    };
+  }
+
+  return {
+    text: `${source.slice(0, 88).trimEnd()}…`,
+    truncated: true,
+  };
+}
+
 function FeedVideoCard({
   active,
   avgGradeText,
+  captionExpanded,
   gradeLocked,
-  gradeMessage,
-  gradeSubmitting,
-  onGradePress,
   height,
+  onOpenGradeSheet,
+  onReportPost,
+  onReportProfile,
   onRevealItems,
+  onToggleCaption,
   post,
   shouldMountVideo,
   topInset,
@@ -71,6 +110,11 @@ function FeedVideoCard({
   const player = useVideoPlayer(shouldMountVideo ? post.video_url : null, (videoPlayer) => {
     videoPlayer.loop = true;
   });
+  const previewTags = post.tags.slice(0, 3);
+  const captionPreview = getCaptionPreview(post.caption);
+  const captionText = captionExpanded
+    ? post.caption.trim() || "Fresh fit, no caption yet."
+    : captionPreview.text;
 
   useEffect(() => {
     if (!shouldMountVideo) {
@@ -99,72 +143,55 @@ function FeedVideoCard({
         </View>
       )}
 
-      <View style={[styles.overlayTopRight, { top: topInset + 12 }]}>
-        <Link href="/(app)/upload" style={styles.overlayLink}>
-          Upload
-        </Link>
-        <Link href="/(app)/account" style={styles.overlayLink}>
-          Account
-        </Link>
+      <View style={styles.videoTint} />
+      <View style={[styles.topStrip, { top: topInset + 10 }]}>
+        <View style={styles.topStripTags}>
+          {previewTags.length > 0 ? (
+            previewTags.map((tag) => (
+              <View key={tag.id} style={styles.topTagChip}>
+                <Text style={styles.tagChipText}>{tag.brand ?? tag.name}</Text>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.tagChipEmpty}>No tags yet</Text>
+          )}
+        </View>
+        <View style={styles.topStripActions}>
+          <Text style={styles.topUsername}>@{post.creator_username}</Text>
+          <Pressable onPress={onRevealItems} style={styles.topActionButton}>
+            <Text style={styles.topActionText}>Items</Text>
+          </Pressable>
+          <Pressable onPress={onReportProfile} style={styles.topActionButtonMuted}>
+            <Text style={styles.topActionTextMuted}>Report profile</Text>
+          </Pressable>
+        </View>
       </View>
 
-      <View style={styles.overlayBottom}>
-        <Text style={styles.username}>@{post.creator_username}</Text>
-        <Text style={styles.caption}>{post.caption || "(no caption)"}</Text>
-        <Text style={styles.avgGrade}>
-          Avg grade: {avgGradeText}
-          {userGrade != null ? `  •  Your grade: ${userGrade}` : ""}
-        </Text>
-        <View style={styles.gradeRow}>
-          {[1, 2, 3, 4, 5].map((value) => (
-            <Pressable
-              key={`${post.id}-grade-${value}`}
-              onPress={() => onGradePress(value)}
-              disabled={gradeSubmitting}
-              style={[
-                styles.gradeChip,
-                gradeLocked ? styles.gradeChipLocked : undefined,
-                userGrade === value ? styles.gradeChipActive : undefined,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.gradeChipText,
-                  userGrade === value ? styles.gradeChipTextActive : undefined,
-                ]}
-              >
-                {value}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        <View style={styles.gradeRow}>
-          {[6, 7, 8, 9, 10].map((value) => (
-            <Pressable
-              key={`${post.id}-grade-${value}`}
-              onPress={() => onGradePress(value)}
-              disabled={gradeSubmitting}
-              style={[
-                styles.gradeChip,
-                gradeLocked ? styles.gradeChipLocked : undefined,
-                userGrade === value ? styles.gradeChipActive : undefined,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.gradeChipText,
-                  userGrade === value ? styles.gradeChipTextActive : undefined,
-                ]}
-              >
-                {value}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        {gradeMessage ? <Text style={styles.gradeMessage}>{gradeMessage}</Text> : null}
-        <Pressable onPress={onRevealItems} style={styles.revealButton}>
-          <Text style={styles.revealButtonText}>Reveal items</Text>
+      <View style={styles.sideRail}>
+        <Pressable onPress={onOpenGradeSheet} style={styles.scoreOrb}>
+          <Text style={styles.scoreOrbValue}>{avgGradeText}</Text>
+          <Text style={styles.scoreOrbLabel}>
+            {userGrade != null ? `Yours ${userGrade}` : "Tap to rate"}
+          </Text>
         </Pressable>
+      </View>
+
+      <View style={styles.bottomOverlay}>
+        <Text style={styles.bottomUsername}>@{post.creator_username}</Text>
+        <Pressable onPress={onToggleCaption}>
+          <Text numberOfLines={captionExpanded ? 5 : 2} style={styles.caption}>
+            {captionText}
+          </Text>
+          {captionPreview.truncated ? (
+            <Text style={styles.expandCopy}>
+              {captionExpanded ? "Show less" : "More"}
+            </Text>
+          ) : null}
+        </Pressable>
+        <Pressable onPress={onReportPost} style={styles.reportTextWrap}>
+          <Text style={styles.reportText}>Report post</Text>
+        </Pressable>
+
       </View>
     </View>
   );
@@ -182,6 +209,7 @@ export default function FeedScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  const cardHeight = Math.max(height - 72, 520);
 
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [offset, setOffset] = useState(0);
@@ -193,6 +221,14 @@ export default function FeedScreen() {
 
   const [sheetVisible, setSheetVisible] = useState(false);
   const [sheetMessage, setSheetMessage] = useState<string | null>(null);
+  const [reportDraft, setReportDraft] = useState<ReportDraft | null>(null);
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [expandedCaptionPostId, setExpandedCaptionPostId] = useState<string | null>(
+    null
+  );
+  const [gradeSheetVisible, setGradeSheetVisible] = useState(false);
+  const [gradeSheetPostId, setGradeSheetPostId] = useState<string | null>(null);
   const [gradeMessageByPost, setGradeMessageByPost] = useState<
     Record<string, string | null>
   >({});
@@ -224,6 +260,13 @@ export default function FeedScreen() {
   ).current;
 
   const activePost = posts[activeIndex] ?? null;
+  const gradeSheetPost =
+    posts.find((post) => post.id === gradeSheetPostId) ?? activePost ?? null;
+
+  const openReportComposer = (draft: ReportDraft) => {
+    setReportDraft(draft);
+    setReportMessage(null);
+  };
 
   const refreshGradeStats = async (postIds: string[]) => {
     if (postIds.length === 0) {
@@ -445,15 +488,78 @@ export default function FeedScreen() {
     setSheetVisible(true);
   };
 
-  const openTagLink = async (url: string) => {
-    const validation = validateClothingTagUrl(url);
+  const openGradeSheet = (postId: string) => {
+    setGradeSheetPostId(postId);
+    setGradeSheetVisible(true);
+  };
+
+  const handleSubmitReport = async ({
+    details,
+    reason,
+  }: {
+    details: string;
+    reason: string;
+  }) => {
+    if (!user?.id || !reportDraft) {
+      setReportMessage("Sign in required.");
+      return;
+    }
+
+    setReportSubmitting(true);
+    setReportMessage(null);
+
+    const result = await submitReport({
+      details:
+        reportDraft.targetType === "link" && reportDraft.initialDetails
+          ? buildLinkReportDetails(reportDraft.initialDetails, details)
+          : details,
+      reason,
+      reporterId: user.id,
+      targetId: reportDraft.targetId,
+      targetType: reportDraft.targetType,
+    });
+
+    setReportSubmitting(false);
+
+    if (!result.success) {
+      if (__DEV__) {
+        console.error("Failed to submit report", result.error);
+      }
+      setReportMessage(
+        "Could not submit report. Check connection and try again."
+      );
+      return;
+    }
+
+    setReportDraft(null);
+    setFeedMessage("Report submitted.");
+  };
+
+  const openTagLink = async (tag: FeedTag) => {
+    const validation = validateClothingTagUrl(tag.url);
     if (!validation.valid) {
       setSheetMessage("Blocked unsafe link.");
       return;
     }
 
+    const normalizedUrl = validation.normalized;
+    const postId = activePost?.id;
+
+    if (user?.id && postId && shouldLogOutboundClick(tag.id)) {
+      void logOutboundClickBestEffort({
+        postId,
+        tagId: tag.id,
+        url: normalizedUrl,
+        userId: user.id,
+      }).then((result) => {
+        if (__DEV__ && result.error) {
+          console.error("Failed to log outbound click", result.error);
+        }
+      });
+    }
+
     try {
-      await WebBrowser.openBrowserAsync(validation.normalized);
+      await WebBrowser.openBrowserAsync(normalizedUrl);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open link.";
@@ -464,7 +570,7 @@ export default function FeedScreen() {
   const listFooter = useMemo(() => {
     if (isLoading) {
       return (
-        <View style={[styles.footer, { height }]}>
+        <View style={[styles.footer, { height: cardHeight }]}>
           <Text style={styles.footerText}>Loading…</Text>
         </View>
       );
@@ -472,14 +578,14 @@ export default function FeedScreen() {
 
     if (!hasMore) {
       return (
-        <View style={[styles.footer, { height }]}>
+        <View style={[styles.footer, { height: cardHeight }]}>
           <Text style={styles.footerText}>No more posts</Text>
         </View>
       );
     }
 
     return null;
-  }, [hasMore, height, isLoading]);
+  }, [cardHeight, hasMore, isLoading]);
 
   return (
     <View style={styles.screen}>
@@ -509,19 +615,39 @@ export default function FeedScreen() {
           return (
           <FeedVideoCard
             post={item}
-            height={height}
+            height={cardHeight}
             active={index === activeIndex && isFeedFocused}
             shouldMountVideo={Math.abs(index - activeIndex) <= 1}
+            captionExpanded={expandedCaptionPostId === item.id}
+            onToggleCaption={() => {
+              setExpandedCaptionPostId((current) =>
+                current === item.id ? null : item.id
+              );
+            }}
+            onOpenGradeSheet={() => {
+              openGradeSheet(item.id);
+            }}
+            onReportPost={() => {
+              openReportComposer({
+                subtitle: "Report this video post",
+                targetId: item.id,
+                targetType: "post",
+                title: "Report post",
+              });
+            }}
+            onReportProfile={() => {
+              openReportComposer({
+                subtitle: `Report @${item.creator_username}`,
+                targetId: item.creator_id,
+                targetType: "profile",
+                title: "Report profile",
+              });
+            }}
             onRevealItems={openRevealSheet}
             topInset={insets.top}
             avgGradeText={stats?.avg != null ? stats.avg.toFixed(1) : "—"}
             userGrade={stats?.userGrade ?? null}
             gradeLocked={stats?.userGrade != null}
-            gradeSubmitting={gradeSubmittingPostId === item.id}
-            gradeMessage={gradeMessageByPost[item.id] ?? null}
-            onGradePress={(value) => {
-              void submitGrade(item.id, value);
-            }}
           />
           );
         }}
@@ -529,8 +655,8 @@ export default function FeedScreen() {
         snapToAlignment="start"
         decelerationRate="fast"
         getItemLayout={(_, index) => ({
-          length: height,
-          offset: height * index,
+          length: cardHeight,
+          offset: cardHeight * index,
           index,
         })}
         onEndReached={() => {
@@ -549,6 +675,132 @@ export default function FeedScreen() {
         ListFooterComponent={listFooter}
         scrollEnabled={posts.length > 0}
       />
+
+      <ReportComposer
+        visible={reportDraft != null}
+        title={reportDraft?.title ?? "Report"}
+        subtitle={reportDraft?.subtitle ?? "Report this content"}
+        initialDetails=""
+        isSubmitting={reportSubmitting}
+        message={reportMessage}
+        onClose={() => {
+          if (reportSubmitting) {
+            return;
+          }
+          setReportDraft(null);
+          setReportMessage(null);
+        }}
+        onSubmit={handleSubmitReport}
+      />
+
+      <Modal
+        visible={gradeSheetVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setGradeSheetVisible(false)}
+      >
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setGradeSheetVisible(false)}
+        >
+          <Pressable style={styles.sheetPanel} onPress={() => {}}>
+            <Text style={styles.sheetTitle}>Grade this fit</Text>
+            <Text style={styles.sheetSubTitle}>
+              {gradeSheetPost ? `@${gradeSheetPost.creator_username}` : "No post selected"}
+            </Text>
+
+            <Text style={styles.sheetScoreText}>
+              Avg. {gradeSheetPost ? gradeStatsByPost[gradeSheetPost.id]?.avg?.toFixed(1) ?? "—" : "—"}
+              {gradeSheetPost
+                ? gradeStatsByPost[gradeSheetPost.id]?.userGrade != null
+                  ? `  •  Yours ${gradeStatsByPost[gradeSheetPost.id]?.userGrade}`
+                  : ""
+                : ""}
+            </Text>
+
+            <View style={styles.sheetGradeRow}>
+              {[1, 2, 3, 4, 5].map((value) => (
+                <Pressable
+                  key={`sheet-grade-${value}`}
+                  onPress={() => {
+                    if (!gradeSheetPost) {
+                      return;
+                    }
+                    void submitGrade(gradeSheetPost.id, value);
+                  }}
+                  disabled={!gradeSheetPost || gradeSubmittingPostId === gradeSheetPost.id}
+                  style={[
+                    styles.sheetGradeChip,
+                    gradeSheetPost &&
+                    gradeStatsByPost[gradeSheetPost.id]?.userGrade === value
+                      ? styles.sheetGradeChipActive
+                      : undefined,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.sheetGradeChipText,
+                      gradeSheetPost &&
+                      gradeStatsByPost[gradeSheetPost.id]?.userGrade === value
+                        ? styles.sheetGradeChipTextActive
+                        : undefined,
+                    ]}
+                  >
+                    {value}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={styles.sheetGradeRow}>
+              {[6, 7, 8, 9, 10].map((value) => (
+                <Pressable
+                  key={`sheet-grade-${value}`}
+                  onPress={() => {
+                    if (!gradeSheetPost) {
+                      return;
+                    }
+                    void submitGrade(gradeSheetPost.id, value);
+                  }}
+                  disabled={!gradeSheetPost || gradeSubmittingPostId === gradeSheetPost.id}
+                  style={[
+                    styles.sheetGradeChip,
+                    gradeSheetPost &&
+                    gradeStatsByPost[gradeSheetPost.id]?.userGrade === value
+                      ? styles.sheetGradeChipActive
+                      : undefined,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.sheetGradeChipText,
+                      gradeSheetPost &&
+                      gradeStatsByPost[gradeSheetPost.id]?.userGrade === value
+                        ? styles.sheetGradeChipTextActive
+                        : undefined,
+                    ]}
+                  >
+                    {value}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {gradeSheetPost ? (
+              <Text
+                style={
+                  gradeMessageByPost[gradeSheetPost.id]
+                    ? styles.sheetMessage
+                    : styles.sheetHelperText
+                }
+              >
+                {gradeMessageByPost[gradeSheetPost.id] ??
+                  "Tap a score to rate the fit. Ratings save once."}
+              </Text>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={sheetVisible}
@@ -576,25 +828,47 @@ export default function FeedScreen() {
                 const disabled = !link.valid;
 
                 return (
-                  <Pressable
+                  <View
                     key={tag.id}
                     style={[
                       styles.tagRow,
                       disabled ? styles.tagRowDisabled : undefined,
                     ]}
-                    onPress={() => {
-                      if (disabled) {
-                        setSheetMessage("Blocked unsafe link.");
-                        return;
-                      }
-                      void openTagLink(tag.url);
-                    }}
                   >
                     <Text style={styles.tagName}>{tag.name}</Text>
                     <Text style={styles.tagMeta}>Brand: {tag.brand || "-"}</Text>
                     <Text style={styles.tagMeta}>Category: {tag.category || "-"}</Text>
-                    <Text style={styles.tagMeta}>{disabled ? "Unsafe link blocked" : "Open link"}</Text>
-                  </Pressable>
+                    <View style={styles.tagActionRow}>
+                      <Pressable
+                        onPress={() => {
+                          if (disabled) {
+                            setSheetMessage("Blocked unsafe link.");
+                            return;
+                          }
+                          void openTagLink(tag);
+                        }}
+                        style={styles.tagOpenButton}
+                      >
+                        <Text style={styles.tagOpenText}>
+                          {disabled ? "Unsafe link blocked" : "Open link"}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          openReportComposer({
+                            initialDetails: tag.url,
+                            subtitle: `Report tagged link on ${tag.name}`,
+                            targetId: tag.id,
+                            targetType: "link",
+                            title: "Report link",
+                          });
+                        }}
+                        style={styles.tagReportButton}
+                      >
+                        <Text style={styles.tagReportText}>Report link</Text>
+                      </Pressable>
+                    </View>
+                  </View>
                 );
               })
             )}
@@ -606,30 +880,63 @@ export default function FeedScreen() {
 }
 
 const styles = StyleSheet.create({
-  avgGrade: {
-    color: "#fff",
-    fontSize: 14,
-    marginTop: 4,
+  bottomOverlay: {
+    bottom: 24,
+    left: 16,
+    position: "absolute",
+    right: 16,
+    zIndex: 4,
+  },
+  bottomUsername: {
+    color: theme.color.white,
+    fontSize: 15,
+    fontWeight: "800",
+    marginBottom: 6,
   },
   caption: {
-    color: "#fff",
-    fontSize: 16,
-    marginTop: 4,
+    color: theme.color.white,
+    fontSize: 14,
+    lineHeight: 19,
+    maxWidth: "78%",
   },
   cardWrap: {
-    backgroundColor: "#000",
+    backgroundColor: "#0d0806",
+    overflow: "hidden",
     width: "100%",
   },
+  centerText: {
+    color: theme.color.ink,
+    marginTop: 10,
+    textAlign: "center",
+  },
+  expandCopy: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 4,
+  },
   feedMessage: {
-    backgroundColor: theme.color.accentSoft,
-    borderRadius: theme.radius.md,
+    backgroundColor: "rgba(255,249,243,0.92)",
+    borderColor: theme.color.accentSoft,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
     color: theme.color.danger,
     left: 12,
-    padding: 8,
+    padding: 12,
     position: "absolute",
     right: 12,
-    top: 12,
+    top: 18,
     zIndex: 20,
+  },
+  footer: {
+    alignItems: "center",
+    backgroundColor: theme.color.shell,
+    justifyContent: "center",
+    width: "100%",
+  },
+  footerText: {
+    color: theme.color.inkSoft,
+    fontSize: 16,
   },
   fullscreenCenter: {
     alignItems: "center",
@@ -639,64 +946,8 @@ const styles = StyleSheet.create({
     width: "100%",
     zIndex: 10,
   },
-  centerText: {
-    color: theme.color.white,
-    marginTop: 10,
-  },
-  gradeChip: {
-    alignItems: "center",
-    backgroundColor: "rgba(242,236,229,0.9)",
-    borderRadius: theme.radius.pill,
-    marginRight: 6,
-    marginTop: 6,
-    minWidth: 30,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  gradeChipLocked: {
-    opacity: 0.72,
-  },
-  gradeChipActive: {
-    backgroundColor: theme.color.accent,
-  },
-  gradeChipText: {
-    color: theme.color.ink,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  gradeChipTextActive: {
-    color: theme.color.white,
-  },
-  gradeMessage: {
-    color: "#fff",
-    fontSize: 12,
-    marginTop: 6,
-  },
-  gradeRow: {
-    flexDirection: "row",
-    marginTop: 2,
-  },
-  footer: {
-    alignItems: "center",
-    backgroundColor: "#111",
-    justifyContent: "center",
-    width: "100%",
-  },
-  footerText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  overlayBottom: {
-    backgroundColor: "rgba(24,18,12,0.34)",
-    borderRadius: theme.radius.lg,
-    bottom: 22,
-    left: 12,
-    padding: 12,
-    position: "absolute",
-    right: 12,
-  },
   overlayLink: {
-    backgroundColor: "rgba(242,236,229,0.94)",
+    backgroundColor: theme.color.white,
     borderRadius: theme.radius.pill,
     color: theme.color.ink,
     fontSize: 14,
@@ -706,61 +957,128 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
-  overlayTopRight: {
-    alignItems: "flex-end",
-    position: "absolute",
-    right: 12,
-  },
   placeholderText: {
-    color: "#cfcfcf",
+    color: theme.color.white,
     fontSize: 16,
   },
-  revealButton: {
-    alignSelf: "flex-start",
-    backgroundColor: theme.color.accent,
-    borderRadius: theme.radius.pill,
-    marginTop: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    ...theme.shadow.card,
-  },
-  revealButtonText: {
-    color: "#fff",
+  reportText: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 12,
     fontWeight: "700",
   },
+  reportTextWrap: {
+    alignSelf: "flex-start",
+    marginTop: 10,
+  },
+  scoreOrb: {
+    alignItems: "center",
+    backgroundColor: "rgba(255, 249, 243, 0.88)",
+    borderColor: "rgba(255,255,255,0.22)",
+    borderRadius: 999,
+    borderWidth: 1,
+    minHeight: 82,
+    minWidth: 82,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+  },
+  scoreOrbLabel: {
+    color: theme.color.inkSoft,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 4,
+    textAlign: "center",
+  },
+  scoreOrbValue: {
+    color: theme.color.accentBright,
+    fontFamily: "serif",
+    fontSize: 30,
+    fontWeight: "700",
+    lineHeight: 30,
+  },
   screen: {
-    backgroundColor: "#000",
+    backgroundColor: theme.color.shell,
     flex: 1,
   },
   sheetBackdrop: {
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(0,0,0,0.42)",
     flex: 1,
     justifyContent: "flex-end",
   },
   sheetEmpty: {
-    color: "#555",
+    color: theme.color.inkSoft,
     marginTop: 12,
   },
+  sheetGradeChip: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: theme.radius.pill,
+    marginRight: 10,
+    marginTop: 10,
+    minWidth: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  sheetGradeChipActive: {
+    backgroundColor: theme.color.accentBright,
+  },
+  sheetGradeChipText: {
+    color: theme.color.ink,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  sheetGradeChipTextActive: {
+    color: theme.color.white,
+  },
+  sheetGradeRow: {
+    flexDirection: "row",
+    marginTop: 2,
+  },
+  sheetHelperText: {
+    color: theme.color.inkSoft,
+    fontSize: 13,
+    marginTop: 14,
+  },
   sheetMessage: {
-    color: "#b00020",
-    marginTop: 8,
+    color: theme.color.accentBright,
+    fontSize: 13,
+    marginTop: 14,
   },
   sheetPanel: {
-    backgroundColor: theme.color.bgPanel,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
-    maxHeight: "70%",
-    padding: 16,
+    backgroundColor: theme.color.shell,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    maxHeight: "72%",
+    padding: 18,
+  },
+  sheetScoreText: {
+    color: theme.color.inkSoft,
+    fontSize: 15,
+    marginTop: 8,
   },
   sheetSubTitle: {
     color: theme.color.muted,
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 13,
+    marginTop: 4,
   },
   sheetTitle: {
     color: theme.color.ink,
     fontFamily: "serif",
-    fontSize: 22,
+    fontSize: 24,
+    fontWeight: "700",
+  },
+  sideRail: {
+    position: "absolute",
+    right: 14,
+    top: "44%",
+    zIndex: 4,
+  },
+  tagChipEmpty: {
+    color: theme.color.inkSoft,
+    fontSize: 13,
+  },
+  tagChipText: {
+    color: theme.color.accentBright,
+    fontSize: 13,
     fontWeight: "700",
   },
   tagMeta: {
@@ -768,13 +1086,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
+  tagActionRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
   tagName: {
     color: theme.color.ink,
     fontSize: 15,
     fontWeight: "700",
   },
+  tagOpenButton: {
+    backgroundColor: "rgba(234,47,35,0.10)",
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  tagOpenText: {
+    color: theme.color.inkSoft,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  tagReportButton: {
+    backgroundColor: "rgba(255,250,246,0.98)",
+    borderColor: theme.color.accentSoft,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  tagReportText: {
+    color: theme.color.accentBright,
+    fontSize: 12,
+    fontWeight: "700",
+  },
   tagRow: {
-    backgroundColor: theme.color.white,
+    backgroundColor: "rgba(255,250,246,0.98)",
     borderColor: theme.color.border,
     borderRadius: theme.radius.md,
     borderWidth: 1,
@@ -785,10 +1133,68 @@ const styles = StyleSheet.create({
   tagRowDisabled: {
     opacity: 0.55,
   },
-  username: {
-    color: "#fff",
-    fontSize: 17,
+  topActionButton: {
+    backgroundColor: "rgba(234,47,35,0.14)",
+    borderRadius: theme.radius.pill,
+    marginLeft: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  topActionText: {
+    color: theme.color.accentBright,
+    fontSize: 13,
     fontWeight: "700",
+  },
+  topActionButtonMuted: {
+    backgroundColor: "rgba(255,249,243,0.18)",
+    borderColor: "rgba(255,255,255,0.18)",
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    marginLeft: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  topActionTextMuted: {
+    color: theme.color.white,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  topStrip: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,249,243,0.54)",
+    borderColor: "rgba(255,255,255,0.24)",
+    borderRadius: 22,
+    borderWidth: 1,
+    flexDirection: "row",
+    left: 12,
+    minHeight: 62,
+    paddingHorizontal: 12,
+    position: "absolute",
+    right: 12,
+    zIndex: 4,
+  },
+  topStripActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    marginLeft: 12,
+  },
+  topStripTags: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  topTagChip: {
+    backgroundColor: "rgba(234,47,35,0.10)",
+    borderRadius: theme.radius.pill,
+    marginRight: 8,
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  topUsername: {
+    color: theme.color.ink,
+    fontSize: 15,
+    fontWeight: "800",
   },
   video: {
     height: "100%",
@@ -797,5 +1203,13 @@ const styles = StyleSheet.create({
   videoPlaceholder: {
     alignItems: "center",
     justifyContent: "center",
+  },
+  videoTint: {
+    backgroundColor: "rgba(27, 19, 13, 0.12)",
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
   },
 });

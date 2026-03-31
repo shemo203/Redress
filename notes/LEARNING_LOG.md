@@ -113,3 +113,100 @@ Start in `app/(app)/index.tsx` for query/paging/autoplay/reveal logic, then chec
 
 ### If I need to debug this later: where to look first
 Start in `app/(app)/index.tsx`: `submitGrade` for insert/error handling, `refreshGradeStats` for average/user-grade state, then validate DB constraints/policies in `supabase/migrations/20260305000100_q2_core_schema.sql`.
+
+## Q9 — Outbound Click Logging
+
+### What changed
+- Added best-effort outbound click logging when a user taps a clothing tag link from the Reveal Items UI.
+- Reused the shared URL validator so only safe `http/https` links are logged and opened.
+- Added a short per-tag debounce window to avoid spamming `outbound_clicks` on repeated taps.
+- Added a dev-only Account screen debug panel that shows recent session-local outbound click insert attempts for the current user.
+
+### Why we did it
+- Q9 measures commerce intent by recording which tagged product links users actually tap.
+- The logging path must not block the user from opening the retailer URL if logging fails.
+
+### Key files touched
+- `app/(app)/index.tsx` — Reveal Items tap path now validates, debounces, logs best-effort, then opens the browser.
+- `src/features/analytics/index.ts` — Helper functions for outbound click debounce, insert, and dev debug entries.
+- `app/(app)/account.tsx` — Dev-only recent outbound click panel for verification during local testing.
+- `docs/40_SECURITY_PRIVACY.md` — Documented outbound click logging fields and behavior.
+
+### Important concepts involved (explain simply)
+- Best-effort analytics: analytics writes should never block core user action. Here, the important action is opening the link.
+- Shared validation: the same URL safety rules are reused for both browser open and click logging, so we do not log unsafe URLs.
+- Debounce/throttle: repeated taps on the same tag inside a short time window are treated as one log-worthy click.
+- RLS-aware debug strategy: the DB currently allows inserts to `outbound_clicks` but not client reads, so the dev debug panel shows local session entries instead of querying the table directly.
+
+### How to verify (step-by-step)
+1. Sign in and open a published post with at least one clothing tag.
+2. Tap `Reveal items`.
+3. Tap a safe tag link and confirm the browser opens.
+4. Check Supabase `outbound_clicks` and confirm a row exists with `post_id`, `tag_id`, your `user_id`, and the validated URL.
+5. Tap the same tag repeatedly within about 1.5 seconds and confirm the browser still opens, but the DB gets at most one new row during that debounce window.
+6. In development, open `Account` and review the recent outbound click debug entries for the current session.
+7. To simulate failure, disconnect the network and tap again: confirm the link-open path still runs as far as device connectivity allows, and check the dev console for the insert error log.
+
+### Risks / follow-ups
+- The dev debug list is session-local, not a DB query, because current RLS intentionally blocks client reads on `outbound_clicks`.
+- Debounce is client-side only; if stronger guarantees are needed later, dedupe or rate limiting should also exist server-side.
+- Logging currently happens around link-open time; if a retailer browser fails to launch on-device, the click insert may still have been attempted.
+
+### If I need to debug this later: where to look first
+Start in `app/(app)/index.tsx` (`openTagLink`), then check `src/features/analytics/index.ts` for debounce + insert behavior, then confirm RLS expectations in `docs/30_DATA_MODEL.md` and the `outbound_clicks` table policies in the Q2 migration.
+
+## Q10 — Reporting (Post / Profile / Link)
+
+### What changed
+- Added report entry points for:
+  - `Report post` on feed items
+  - `Report profile` from the creator header in feed
+  - `Report link` on each tagged item in the Reveal Items sheet
+- Added a reusable report composer bottom sheet with fixed reasons, optional details, loading state, and submit handling.
+- Added a reports feature helper for validation, link-report detail formatting, inserts, and fetching the current user’s last 20 reports.
+- Added a migration that tightens report constraints and allows authenticated users to read only their own reports for the dev debug view.
+- Added a dev-only `My Reports` section on the Account screen for quick verification.
+
+### Why we did it
+- Reporting is a day-one MVP safety requirement.
+- The UX needed to stay simple: one reason, optional details, clear success/failure, and no hidden backend assumptions.
+
+### Key files touched
+- `app/(app)/index.tsx` — feed report entry points, report modal wiring, per-link reporting.
+- `app/(app)/account.tsx` — dev-only `My Reports` debug list.
+- `src/features/reports/index.ts` — reasons list, helpers, insert/query functions, blocklist stub constant.
+- `src/features/reports/ReportComposer.tsx` — reusable report bottom sheet UI.
+- `supabase/migrations/20260331000100_q10_reports_constraints_and_read_policy.sql` — report constraints + own-report read policy.
+- `docs/30_DATA_MODEL.md` and `docs/40_SECURITY_PRIVACY.md` — schema/policy/security reporting docs.
+
+### Important concepts involved (explain simply)
+- RLS for reporting: users can always insert their own reports, and for debugging they can read only their own reports, not everyone else’s.
+- Fixed reasons: product wants a controlled list so moderation data is consistent instead of free-form.
+- Link report identification: the report stores `clothing_tags.id` as `target_id`; the actual URL is copied into `details` because `reports` has no dedicated URL column.
+- Validation split:
+  - client enforces reason required + details max length + loading state
+  - DB enforces allowed reasons, UUID-shaped target ids, and details length
+
+### How to verify (step-by-step)
+1. Open a published post in feed.
+2. Submit `Report post` and confirm a row appears in `reports` with:
+   - `target_type = 'post'`
+   - `target_id = video_posts.id`
+3. Submit `Report profile` from the creator header and confirm:
+   - `target_type = 'profile'`
+   - `target_id = creator profile/user id`
+4. Open `Reveal items`, submit `Report link`, and confirm:
+   - `target_type = 'link'`
+   - `target_id = clothing_tags.id`
+   - `details` contains the link URL
+5. Open Account in development and confirm `My Reports` shows the latest submitted reports.
+6. Try submitting without a reason and confirm submit stays disabled.
+7. Try a network failure and confirm the UI shows a friendly error while dev console logs the raw issue.
+
+### Risks / follow-ups
+- Reporting currently exists only on feed-based surfaces; if a dedicated post detail screen is added later, it should reuse the same report composer.
+- `target_id` is validated as UUID text, not a strict foreign key to multiple possible target tables.
+- The blocklist domain mechanism is still just a stub/config placeholder, not active moderation logic.
+
+### If I need to debug this later: where to look first
+Start in `app/(app)/index.tsx` for the entry points and modal state, then `src/features/reports/index.ts` for insert/query logic, then the Q10 migration for constraints and report read policy.

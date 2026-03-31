@@ -50,12 +50,20 @@ Q2 is implemented in migration:
 - `id uuid` primary key, default `gen_random_uuid()`
 - `reporter_id uuid` references `auth.users(id)` on delete cascade
 - `target_type text` constrained to `'post' | 'profile' | 'link'`
-- `target_id text` required
-- `reason text` required
+- `target_id text` required, UUID text for the reported entity id
+- `reason text` required, constrained to:
+  - `offensive content`
+  - `sexual/explicit content`
+  - `harassment`
+  - `spam`
+  - `broken/malicious link`
 - `details text` nullable
+- `details` max length `500`
 - `created_at timestamptz` default `now()`
-- additional check:
-  - if `target_type='link'`, `target_id` must be `http/https`
+- target id usage:
+  - `post` => `video_posts.id`
+  - `profile` => `profiles.id`
+  - `link` => `clothing_tags.id` (link URL can be included in `details`)
 
 ### outbound_clicks
 - `id uuid` primary key, default `gen_random_uuid()`
@@ -75,7 +83,7 @@ Q2 is implemented in migration:
 4. Publish requires at least one clothing tag:
    - enforced by RPC `public.publish_post(post_id uuid)` before status flip
 5. URL safety (MVP rule):
-   - helper `public.is_http_url(text)` used by checks on `video_posts.video_url`, `clothing_tags.url`, `outbound_clicks.url` and `reports.target_id` for link reports
+   - helper `public.is_http_url(text)` used by checks on `video_posts.video_url`, `clothing_tags.url`, and `outbound_clicks.url`
 
 ## RLS Summary
 RLS is enabled on:
@@ -95,7 +103,7 @@ RLS is enabled on:
 - `grades`: insert allowed only when `user_id = auth.uid()` and post is published
 - `video_posts`: creators can create/update/delete only their own drafts (direct publish via normal `update` is blocked)
 - `clothing_tags`: creators can insert/update/delete their own tags only on their own draft posts
-- `reports`: insert only when `reporter_id = auth.uid()`; no read policy
+- `reports`: insert only when `reporter_id = auth.uid()`; authenticated users can `select` only their own reports for debug/verification
 - `outbound_clicks`: insert only when `user_id = auth.uid()` and post is published; no read policy
 - `profiles`: authenticated read; insert/update only for own row (`id = auth.uid()`)
 

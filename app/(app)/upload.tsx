@@ -1,5 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useState } from "react";
 import {
@@ -50,6 +50,7 @@ function createUuidLike() {
 }
 
 export default function UploadScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const [caption, setCaption] = useState("");
   const [pickedVideo, setPickedVideo] = useState<PickedVideo | null>(null);
@@ -183,10 +184,33 @@ export default function UploadScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Upload video</Text>
-      <Text style={styles.copy}>
-        Pick a video from your library. This creates a draft post.
-      </Text>
+      <View style={styles.heroGlow} />
+
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Post Your Fit</Text>
+        <Pressable onPress={() => router.replace("/(app)")} style={styles.closeButton}>
+          <Text style={styles.closeText}>×</Text>
+        </Pressable>
+      </View>
+
+      <Pressable onPress={pickVideo} style={styles.uploadPanel}>
+        {uploadedVideoUrl ? (
+          <VideoView
+            player={previewPlayer}
+            style={styles.panelPreview}
+            contentFit="cover"
+            nativeControls
+          />
+        ) : (
+          <View style={styles.panelEmptyState}>
+            <View style={styles.uploadBadge}>
+              <Text style={styles.uploadBadgeArrow}>↑</Text>
+            </View>
+            <Text style={styles.panelTitle}>Upload Video</Text>
+            <Text style={styles.panelCopy}>Tap to select from gallery</Text>
+          </View>
+        )}
+      </Pressable>
 
       <Text style={styles.label}>Caption (optional)</Text>
       <TextInput
@@ -195,10 +219,6 @@ export default function UploadScreen() {
         style={styles.input}
         value={caption}
       />
-
-      <Pressable onPress={pickVideo} style={[styles.button, styles.pickButton]}>
-        <Text style={styles.buttonText}>Pick video</Text>
-      </Pressable>
 
       {pickedVideo ? (
         <View style={styles.metaWrap}>
@@ -236,15 +256,6 @@ export default function UploadScreen() {
           </Link>
         </View>
       ) : null}
-
-      {uploadedVideoUrl ? (
-        <VideoView
-          player={previewPlayer}
-          style={styles.preview}
-          contentFit="contain"
-          nativeControls
-        />
-      ) : null}
     </ScrollView>
   );
 }
@@ -253,28 +264,60 @@ const styles = StyleSheet.create({
   button: {
     alignItems: "center",
     borderRadius: theme.radius.pill,
-    marginTop: 10,
-    paddingVertical: 12,
-    ...theme.shadow.card,
+    marginTop: 12,
+    paddingVertical: 14,
+    shadowColor: "#9f8270",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
   },
   buttonText: {
     color: theme.color.white,
+    fontSize: 15,
     fontWeight: "700",
   },
+  closeButton: {
+    alignItems: "center",
+    height: 40,
+    justifyContent: "center",
+    width: 40,
+  },
+  closeText: {
+    color: theme.color.inkSoft,
+    fontSize: 30,
+    fontWeight: "300",
+    lineHeight: 30,
+  },
   container: {
-    backgroundColor: theme.color.bg,
+    backgroundColor: theme.color.shell,
     flexGrow: 1,
-    padding: 16,
+    padding: 18,
   },
   copy: {
     color: theme.color.muted,
     marginBottom: 8,
   },
   disabledButton: {
-    backgroundColor: "#cc9b95",
+    backgroundColor: "#d8a8a2",
+  },
+  headerRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  heroGlow: {
+    backgroundColor: "rgba(241, 226, 215, 0.7)",
+    borderRadius: 260,
+    height: 320,
+    left: 90,
+    position: "absolute",
+    top: 90,
+    width: 320,
   },
   input: {
-    backgroundColor: theme.color.bgPanel,
+    backgroundColor: "rgba(255,250,246,0.98)",
     borderColor: theme.color.border,
     borderRadius: theme.radius.md,
     borderWidth: 1,
@@ -282,29 +325,51 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   label: {
-    color: theme.color.ink,
+    color: theme.color.inkSoft,
+    fontSize: 13,
     fontWeight: "600",
     marginBottom: 6,
-    marginTop: 8,
+    marginTop: 16,
   },
   linkText: {
-    color: theme.color.accent,
+    color: theme.color.accentBright,
     fontSize: 14,
     fontWeight: "700",
     marginTop: 10,
   },
   meta: {
-    color: theme.color.ink,
+    color: theme.color.inkSoft,
     fontSize: 12,
   },
   metaWrap: {
-    backgroundColor: theme.color.bgPanel,
+    backgroundColor: "rgba(255,249,243,0.92)",
     borderColor: theme.color.border,
     borderRadius: theme.radius.md,
     borderWidth: 1,
     gap: 4,
     marginTop: 10,
     padding: 10,
+  },
+  panelCopy: {
+    color: theme.color.inkSoft,
+    fontSize: 16,
+    marginTop: 8,
+  },
+  panelEmptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  panelPreview: {
+    borderRadius: 34,
+    height: "100%",
+    width: "100%",
+  },
+  panelTitle: {
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 24,
+    fontWeight: "700",
+    marginTop: 20,
   },
   pickButton: {
     backgroundColor: "#8f7d70",
@@ -317,7 +382,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   status: {
-    color: theme.color.ink,
+    color: theme.color.inkSoft,
     marginTop: 10,
   },
   successTitle: {
@@ -327,7 +392,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   successWrap: {
-    backgroundColor: theme.color.bgPanel,
+    backgroundColor: "rgba(255,249,243,0.92)",
     borderColor: theme.color.border,
     borderRadius: theme.radius.md,
     borderWidth: 1,
@@ -337,11 +402,36 @@ const styles = StyleSheet.create({
   title: {
     color: theme.color.ink,
     fontFamily: "serif",
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: "700",
-    marginBottom: 8,
   },
   uploadButton: {
-    backgroundColor: theme.color.accent,
+    backgroundColor: theme.color.accentBright,
+  },
+  uploadBadge: {
+    alignItems: "center",
+    backgroundColor: "rgba(140,120,110,0.10)",
+    borderRadius: 999,
+    height: 92,
+    justifyContent: "center",
+    width: 92,
+  },
+  uploadBadgeArrow: {
+    color: theme.color.inkSoft,
+    fontSize: 40,
+    fontWeight: "300",
+    marginTop: -6,
+  },
+  uploadPanel: {
+    alignItems: "center",
+    backgroundColor: "rgba(245,238,231,0.94)",
+    borderColor: theme.color.border,
+    borderRadius: 34,
+    borderStyle: "dashed",
+    borderWidth: 2,
+    height: 520,
+    justifyContent: "center",
+    overflow: "hidden",
+    padding: 24,
   },
 });
