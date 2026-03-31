@@ -167,6 +167,7 @@ Basic trim/crop support
 Caption field
 Mandatory clothing tagging before publishing
 Publish button
+Save draft button
 Video Constraints
 Recommended MVP constraints:
 vertical orientation preferred
@@ -183,6 +184,7 @@ optional brand name
 If an outbound URL is present, it must be validated and limited to safe `http://` or `https://` schemes.
 UX Requirement
 The tagging flow must be simple enough that a casual creator can finish it in under 1–2 minutes.
+For MVP, the preferred compose flow keeps video selection, caption entry, and tag entry on one screen. Saving a draft should be a secondary fallback, not a mandatory navigation step.
 
 7.4 Tag Reveal System
 Description

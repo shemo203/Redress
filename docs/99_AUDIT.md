@@ -10,7 +10,7 @@ Scope:
 ## Sanity Summary
 - Core MVP loop is mostly present:
   - auth gate
-  - upload draft
+  - compose upload
   - tagging
   - atomic publish
   - vertical feed
@@ -206,8 +206,8 @@ TestFlight path:
 Verify on-device:
 1. Sign up and sign in works
 2. Terms/Privacy links open to real pages
-3. Upload a video and create a draft
-4. Add at least one tag and publish
+3. Upload a video, add at least one tag, and publish from the compose screen
+4. Save a draft and reopen it later from the draft route
 5. Published post appears in feed
 6. Active video autoplays and inactive video pauses
 7. Reveal Items opens quickly

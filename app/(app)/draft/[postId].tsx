@@ -11,19 +11,14 @@ import {
   View,
 } from "react-native";
 
-import { REQUIRE_TAG_URLS, theme } from "../../../src/constants";
+import {
+  REQUIRE_TAG_URLS,
+  TAG_CATEGORY_OPTIONS,
+  theme,
+} from "../../../src/constants";
 import { useAuth } from "../../../src/features/auth";
 import { supabase } from "../../../src/lib/supabaseClient";
 import { validateClothingTagUrl } from "../../../src/utils";
-
-const CATEGORY_OPTIONS = [
-  "tops",
-  "bottoms",
-  "outerwear",
-  "shoes",
-  "accessories",
-  "other",
-] as const;
 
 type DraftPost = {
   caption: string;
@@ -353,7 +348,7 @@ export default function DraftPostScreen() {
 
       <Text style={styles.label}>Category</Text>
       <View style={styles.categoryWrap}>
-        {CATEGORY_OPTIONS.map((option) => (
+        {TAG_CATEGORY_OPTIONS.map((option) => (
           <Pressable
             key={option}
             onPress={() => setTagCategory(option)}

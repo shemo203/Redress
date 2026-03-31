@@ -5,7 +5,7 @@ Ship the MVP for an Expo client backed by Supabase.
 
 ## Core Rules
 - Authentication is required.
-- Creating a post requires at least one tag.
+- Publishing a post requires at least one tag.
 - Publishing a draft is atomic and must go through `publish_post(post_id)` checks.
 - Grades are whole numbers from 1 to 10.
 - Each user can grade a post once.
@@ -14,6 +14,12 @@ Ship the MVP for an Expo client backed by Supabase.
 - Outbound link clicks must be logged.
 - Users can report posts or other unsafe content.
 - Clothing tags require a name and category; outbound URL requirement is controlled by `EXPO_PUBLIC_REQUIRE_TAG_URLS` and defaults to required.
+
+## Compose Flow
+- The primary post flow lives on the upload screen.
+- Creators pick a video, add a caption, add clothing tags inline, and publish from the same screen.
+- Saving a draft is still supported, but it is a fallback path instead of a required step in the main flow.
+- Publishing still requires at least one clothing tag and still goes through `publish_post(post_id)` for the final status flip.
 
 ## Q5 Tag URL Rule
 - If `EXPO_PUBLIC_REQUIRE_TAG_URLS=true`:
