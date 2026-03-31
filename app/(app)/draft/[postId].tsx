@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 
-import { theme } from "../../../src/constants";
+import { REQUIRE_TAG_URLS, theme } from "../../../src/constants";
 import { useAuth } from "../../../src/features/auth";
 import { supabase } from "../../../src/lib/supabaseClient";
 import { validateClothingTagUrl } from "../../../src/utils";
@@ -39,7 +39,7 @@ type ClothingTag = {
   category: string;
   id: string;
   name: string;
-  url: string;
+  url: string | null;
 };
 
 export default function DraftPostScreen() {
@@ -127,7 +127,9 @@ export default function DraftPostScreen() {
 
     const cleanName = tagName.trim();
     const cleanBrand = tagBrand.trim();
-    const validation = validateClothingTagUrl(tagUrl);
+    const validation = validateClothingTagUrl(tagUrl, {
+      requireUrl: REQUIRE_TAG_URLS,
+    });
 
     if (!cleanName) {
       setStatusMessage("Tag name is required.");
@@ -153,7 +155,7 @@ export default function DraftPostScreen() {
       creator_id: user.id,
       name: cleanName,
       post_id: postId,
-      url: validation.normalized,
+      url: validation.present ? validation.normalized : null,
     };
 
     if (editingTagId) {
@@ -226,7 +228,7 @@ export default function DraftPostScreen() {
     setTagName(tag.name);
     setTagCategory(tag.category || "other");
     setTagBrand(tag.brand ?? "");
-    setTagUrl(tag.url);
+    setTagUrl(tag.url ?? "");
     setStatusMessage(null);
   };
 
@@ -380,14 +382,21 @@ export default function DraftPostScreen() {
         placeholder="Optional"
       />
 
-      <Text style={styles.label}>URL *</Text>
+      <Text style={styles.label}>
+        {REQUIRE_TAG_URLS ? "URL *" : "URL"}
+      </Text>
       <TextInput
         style={styles.input}
         value={tagUrl}
         onChangeText={setTagUrl}
-        placeholder="https://..."
+        placeholder={REQUIRE_TAG_URLS ? "https://..." : "Optional https://..."}
         autoCapitalize="none"
       />
+      <Text style={styles.helperText}>
+        {REQUIRE_TAG_URLS
+          ? "Use a safe http:// or https:// link."
+          : "Leave empty to save a non-clickable tag, or add a safe http:// / https:// link."}
+      </Text>
 
       <Pressable
         onPress={saveTag}
@@ -423,7 +432,7 @@ export default function DraftPostScreen() {
           <Text style={styles.tagName}>{tag.name}</Text>
           <Text style={styles.tagMeta}>Category: {tag.category || "other"}</Text>
           <Text style={styles.tagMeta}>Brand: {tag.brand || "-"}</Text>
-          <Text style={styles.tagMeta}>URL: {tag.url}</Text>
+          <Text style={styles.tagMeta}>URL: {tag.url || "No outbound link"}</Text>
           <View style={styles.tagActions}>
             <Pressable onPress={() => startEdit(tag)} style={styles.smallButton}>
               <Text style={styles.smallButtonText}>Edit</Text>
@@ -496,6 +505,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     marginTop: 10,
+  },
+  helperText: {
+    color: theme.color.muted,
+    fontSize: 12,
+    marginBottom: 10,
+    marginTop: -2,
   },
   label: {
     color: theme.color.ink,

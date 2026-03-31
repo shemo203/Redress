@@ -34,7 +34,7 @@ Q2 is implemented in migration:
 - `name text` required, non-empty (trimmed)
 - `category text` required, default `'other'`
 - `brand text` nullable
-- `url text` required, `http/https` only
+- `url text` nullable, `http/https` only when present
 - `created_at timestamptz` default `now()`
 - `updated_at timestamptz` default `now()`
 

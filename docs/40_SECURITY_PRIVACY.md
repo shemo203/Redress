@@ -14,14 +14,15 @@ Optionally: maintain a blocked-domain list.
 ### Implemented URL validation rules (Q5 tag CRUD)
 For `clothing_tags.url`, the client validation now enforces:
 - Trim whitespace before validation and save.
-- URL is required (empty string is rejected).
+- URL requirement is controlled by `EXPO_PUBLIC_REQUIRE_TAG_URLS` and defaults to `true`.
+- If the flag is `false`, an empty URL is allowed and the tag is treated as non-clickable in Reveal Items.
 - Reject if the trimmed value starts with any blocked scheme:
   - `javascript:`
   - `data:`
   - `file:`
   - `blob:`
 - Parse with URL parser; reject malformed values.
-- Accept only `http://` or `https://` protocol.
+- Accept only `http://` or `https://` protocol when a URL is present.
 - Save the trimmed normalized value only after all checks pass.
 
 ## Abuse controls

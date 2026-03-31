@@ -48,7 +48,14 @@ export async function logOutboundClickBestEffort({
   url,
   userId,
 }: OutboundClickInput) {
-  const validation = validateClothingTagUrl(url);
+  const validation = validateClothingTagUrl(url, { requireUrl: false });
+  if (!validation.present) {
+    return {
+      error: "Tag has no outbound URL.",
+      logged: false,
+      normalizedUrl: null,
+    };
+  }
   if (!validation.valid) {
     return {
       error: validation.error,

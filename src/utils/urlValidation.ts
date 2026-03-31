@@ -3,16 +3,26 @@ const BLOCKED_SCHEMES = ["javascript:", "data:", "file:", "blob:"];
 export type UrlValidationResult = {
   error: string | null;
   normalized: string;
+  present: boolean;
   valid: boolean;
 };
 
-export function validateClothingTagUrl(input: string): UrlValidationResult {
-  const normalized = input.trim();
+type ValidateClothingTagUrlOptions = {
+  requireUrl?: boolean;
+};
+
+export function validateClothingTagUrl(
+  input: string | null | undefined,
+  options: ValidateClothingTagUrlOptions = {}
+): UrlValidationResult {
+  const normalized = (input ?? "").trim();
+  const requireUrl = options.requireUrl ?? true;
   if (!normalized) {
     return {
-      error: "URL is required.",
+      error: requireUrl ? "URL is required." : null,
       normalized,
-      valid: false,
+      present: false,
+      valid: !requireUrl,
     };
   }
 
@@ -21,6 +31,7 @@ export function validateClothingTagUrl(input: string): UrlValidationResult {
     return {
       error: "Only http:// or https:// links are allowed.",
       normalized,
+      present: true,
       valid: false,
     };
   }
@@ -32,6 +43,7 @@ export function validateClothingTagUrl(input: string): UrlValidationResult {
     return {
       error: "Enter a valid URL.",
       normalized,
+      present: true,
       valid: false,
     };
   }
@@ -40,6 +52,7 @@ export function validateClothingTagUrl(input: string): UrlValidationResult {
     return {
       error: "Only http:// or https:// links are allowed.",
       normalized,
+      present: true,
       valid: false,
     };
   }
@@ -47,6 +60,7 @@ export function validateClothingTagUrl(input: string): UrlValidationResult {
   return {
     error: null,
     normalized,
+    present: true,
     valid: true,
   };
 }

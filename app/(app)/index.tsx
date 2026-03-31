@@ -36,7 +36,7 @@ type FeedTag = {
   category: string | null;
   id: string;
   name: string;
-  url: string;
+  url: string | null;
 };
 
 type FeedPost = {
@@ -162,7 +162,7 @@ function FeedVideoCard({
             <Text style={styles.topActionText}>Items</Text>
           </Pressable>
           <Pressable onPress={onReportProfile} style={styles.topActionButtonMuted}>
-            <Text style={styles.topActionTextMuted}>Report profile</Text>
+            <Text style={styles.topActionTextMuted}>Report</Text>
           </Pressable>
         </View>
       </View>
@@ -536,7 +536,13 @@ export default function FeedScreen() {
   };
 
   const openTagLink = async (tag: FeedTag) => {
-    const validation = validateClothingTagUrl(tag.url);
+    const validation = validateClothingTagUrl(tag.url, {
+      requireUrl: false,
+    });
+    if (!validation.present) {
+      setSheetMessage("This tag does not have an outbound link.");
+      return;
+    }
     if (!validation.valid) {
       setSheetMessage("Blocked unsafe link.");
       return;
@@ -824,8 +830,11 @@ export default function FeedScreen() {
               <Text style={styles.sheetEmpty}>No items tagged for this post.</Text>
             ) : (
               activePost.tags.map((tag) => {
-                const link = validateClothingTagUrl(tag.url);
-                const disabled = !link.valid;
+                const link = validateClothingTagUrl(tag.url, {
+                  requireUrl: false,
+                });
+                const hasLink = link.present;
+                const disabled = !hasLink || !link.valid;
 
                 return (
                   <View
@@ -838,35 +847,54 @@ export default function FeedScreen() {
                     <Text style={styles.tagName}>{tag.name}</Text>
                     <Text style={styles.tagMeta}>Brand: {tag.brand || "-"}</Text>
                     <Text style={styles.tagMeta}>Category: {tag.category || "-"}</Text>
+                    <Text style={styles.tagMeta}>
+                      {hasLink
+                        ? `URL: ${tag.url}`
+                        : "No outbound link attached"}
+                    </Text>
                     <View style={styles.tagActionRow}>
                       <Pressable
+                        disabled={disabled}
                         onPress={() => {
-                          if (disabled) {
+                          if (!hasLink) {
+                            setSheetMessage("This tag does not have an outbound link.");
+                            return;
+                          }
+                          if (!link.valid) {
                             setSheetMessage("Blocked unsafe link.");
                             return;
                           }
                           void openTagLink(tag);
                         }}
-                        style={styles.tagOpenButton}
+                        style={[
+                          styles.tagOpenButton,
+                          disabled ? styles.tagOpenButtonDisabled : undefined,
+                        ]}
                       >
                         <Text style={styles.tagOpenText}>
-                          {disabled ? "Unsafe link blocked" : "Open link"}
+                          {!hasLink
+                            ? "No link"
+                            : !link.valid
+                              ? "Unsafe link blocked"
+                              : "Open link"}
                         </Text>
                       </Pressable>
-                      <Pressable
-                        onPress={() => {
-                          openReportComposer({
-                            initialDetails: tag.url,
-                            subtitle: `Report tagged link on ${tag.name}`,
-                            targetId: tag.id,
-                            targetType: "link",
-                            title: "Report link",
-                          });
-                        }}
-                        style={styles.tagReportButton}
-                      >
-                        <Text style={styles.tagReportText}>Report link</Text>
-                      </Pressable>
+                      {hasLink ? (
+                        <Pressable
+                          onPress={() => {
+                            openReportComposer({
+                              initialDetails: tag.url ?? "",
+                              subtitle: `Report tagged link on ${tag.name}`,
+                              targetId: tag.id,
+                              targetType: "link",
+                              title: "Report link",
+                            });
+                          }}
+                          style={styles.tagReportButton}
+                        >
+                          <Text style={styles.tagReportText}>Report link</Text>
+                        </Pressable>
+                      ) : null}
                     </View>
                   </View>
                 );
@@ -1102,6 +1130,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.pill,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  tagOpenButtonDisabled: {
+    opacity: 0.55,
   },
   tagOpenText: {
     color: theme.color.inkSoft,

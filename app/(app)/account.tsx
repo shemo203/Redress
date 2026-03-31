@@ -7,9 +7,9 @@ import {
   Text,
   View,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { Link, useFocusEffect } from "expo-router";
 
-import { theme } from "../../src/constants";
+import { DEV_SEED_ENABLED, theme } from "../../src/constants";
 import {
   getRecentOutboundClickDebugEntries,
   type OutboundClickDebugEntry,
@@ -267,6 +267,18 @@ export default function AccountScreen() {
         </Pressable>
       </View>
 
+      {DEV_SEED_ENABLED ? (
+        <View style={styles.debugCard}>
+          <Text style={styles.debugHeading}>Dev: seed database</Text>
+          <Text style={styles.debugHint}>
+            Open the seeding guide and use `supabase/seed.sql` from SQL Editor.
+          </Text>
+          <Link href="/(app)/dev-seed" style={styles.debugLink}>
+            Seed database instructions
+          </Link>
+        </View>
+      ) : null}
+
       {__DEV__ ? (
         <View style={styles.debugCard}>
           <Text style={styles.debugHeading}>Dev: recent outbound clicks</Text>
@@ -350,6 +362,12 @@ const styles = StyleSheet.create({
     color: theme.color.ink,
     fontSize: 16,
     fontWeight: "700",
+  },
+  debugLink: {
+    color: theme.color.accentBright,
+    fontSize: 14,
+    fontWeight: "700",
+    marginTop: 10,
   },
   debugHint: {
     color: theme.color.muted,

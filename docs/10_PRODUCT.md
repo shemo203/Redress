@@ -13,6 +13,16 @@ Ship the MVP for an Expo client backed by Supabase.
 - Links must be checked for safety before users are sent outbound.
 - Outbound link clicks must be logged.
 - Users can report posts or other unsafe content.
+- Clothing tags require a name and category; outbound URL requirement is controlled by `EXPO_PUBLIC_REQUIRE_TAG_URLS` and defaults to required.
+
+## Q5 Tag URL Rule
+- If `EXPO_PUBLIC_REQUIRE_TAG_URLS=true`:
+  - clothing tag URLs are required
+  - only `http://` and `https://` are allowed
+- If `EXPO_PUBLIC_REQUIRE_TAG_URLS=false`:
+  - clothing tags may be saved without a URL
+  - tags without a URL appear in Reveal Items as non-clickable
+  - any provided URL must still be `http://` or `https://`
 
 ## Q8 Grading UX Rules
 - Grading UI shows values `1..10` on published posts in feed cards.

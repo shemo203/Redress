@@ -16,6 +16,7 @@
 4. Optional auth envs:
    - `EXPO_PUBLIC_GOOGLE_AUTH_ENABLED=false` (set `true` to show Google sign-in button)
    - `EXPO_PUBLIC_GOOGLE_AUTH_REDIRECT_URL=redress://`
+   - `EXPO_PUBLIC_DEV_SEED=false` (set `true` to show the dev-only seed instructions screen in Account)
 5. Start the Expo dev server:
    `npm run start`
 
@@ -77,6 +78,33 @@ This migration:
 
 Upload path used by app:
 - `userId/postId/timestamp.ext`
+
+## Development Seeding
+Use this when you want a fuller local/dev dataset for the feed and Reveal Items flows.
+
+Important constraints:
+- `supabase/seed.sql` does not create or modify `auth.users`.
+- Because `profiles.id` references `auth.users(id)`, the seed script can only upsert profiles for users that already exist.
+- For the full dataset, create about 10 dev accounts first. If fewer exist, the script will seed as many as it can from the available users.
+
+### Apply seeds in Supabase SQL Editor
+1. In the Supabase Dashboard, open `SQL Editor`.
+2. Create a new query.
+3. Open `supabase/seed.sql` from this repo.
+4. Copy the entire file and paste it into SQL Editor.
+5. Run the query.
+6. Reload the app.
+
+The script will:
+- upsert seeded profile content for up to 10 existing auth users
+- recreate 20 deterministic published `video_posts`
+- recreate 50 deterministic `clothing_tags`
+
+### Optional in-app dev helper
+If you want a reminder screen inside the app, set:
+- `EXPO_PUBLIC_DEV_SEED=true`
+
+Then open `Account` and use the dev-only `Seed database instructions` link.
 
 ## Boot Check
 - Signed-out users should be redirected to sign-in.

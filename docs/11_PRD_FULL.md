@@ -178,8 +178,9 @@ Each post must contain at least one clothing tag.
 Each tag should include:
 item name
 category (e.g. shoes, jacket, pants, bag)
-outbound URL
+optional outbound URL
 optional brand name
+If an outbound URL is present, it must be validated and limited to safe `http://` or `https://` schemes.
 UX Requirement
 The tagging flow must be simple enough that a casual creator can finish it in under 1–2 minutes.
 
@@ -192,13 +193,14 @@ When tapped, show an overlay or bottom sheet listing the tagged items
 Each item displays:
 item name
 brand name if available
-outbound link button
+outbound link button when a link exists
 Tapping an item opens the external website in an in-app browser or external browser
 MVP Rules
 Links are manually entered by creators
 No affiliate automation at launch
 No in-app shopping cart
 No price scraping required
+Items without a link may still appear in Reveal Items but should be non-clickable.
 Business Importance
 This system validates whether fashion content can drive shopping behavior, even before monetization is enabled.
 
@@ -474,4 +476,3 @@ For an MVP, this is a strong and focused concept because it tests:
 social behavior through scrolling and posting,
 engagement behavior through grading,
 commercial intent through tag reveals and outbound clicks.
-

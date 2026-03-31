@@ -210,3 +210,48 @@ Start in `app/(app)/index.tsx` (`openTagLink`), then check `src/features/analyti
 
 ### If I need to debug this later: where to look first
 Start in `app/(app)/index.tsx` for the entry points and modal state, then `src/features/reports/index.ts` for insert/query logic, then the Q10 migration for constraints and report read policy.
+
+## Q11 — KPI Measurement Pack
+
+### What changed
+- Added a copy/paste-ready KPI query pack in `docs/70_KPI_QUERIES.md`.
+- Added a plain-English metric definition guide in `docs/71_KPI_DEFINITIONS.md`.
+- Marked unsupported KPIs clearly when the current schema lacks the necessary event instrumentation.
+
+### Why we did it
+- Q11 is about measurement support, not new product behavior.
+- The goal is to let you answer core MVP questions directly in Supabase SQL Editor without adding a full analytics stack yet.
+
+### Key files touched
+- `docs/70_KPI_QUERIES.md` — runnable SQL for acquisition, publishing, grading, commerce intent proxies, and trust/safety.
+- `docs/71_KPI_DEFINITIONS.md` — plain-English explanations and caveats for each KPI.
+
+### Important concepts involved (explain simply)
+- Schema-first analytics: before adding new events, use the tables you already trust (`profiles`, `video_posts`, `clothing_tags`, `grades`, `outbound_clicks`, `reports`).
+- Denominator discipline: some metrics need both a numerator and denominator. If we only have clicks but not views, we should not pretend we have true CTR.
+- Approximation vs instrumentation:
+  - some metrics are valid today with current tables
+  - some are only proxies today
+  - some require a new event table later
+
+### How to verify (step-by-step)
+1. Open Supabase SQL Editor.
+2. Paste and run each query from `docs/70_KPI_QUERIES.md`.
+3. Confirm each query references the current schema correctly:
+   - users from `profiles`
+   - published content from `video_posts`
+   - tags from `clothing_tags`
+   - grading from `grades`
+   - commerce clicks from `outbound_clicks`
+   - safety data from `reports`
+4. For the non-instrumented KPIs, confirm the docs clearly say they are not computable yet and describe the minimal extra event table needed.
+
+### Risks / follow-ups
+- `profiles` is used as the main user-count source; if profile upsert ever fails, acquisition counts will understate true auth signups.
+- True view-based conversion metrics still need event instrumentation, especially:
+  - reveal-sheet opens
+  - post impressions/views
+- SQL metrics can drift if schema names or column meanings change and docs are not updated in the same commit.
+
+### If I need to debug this later: where to look first
+Start with `docs/30_DATA_MODEL.md` to confirm table/column names, then compare each query in `docs/70_KPI_QUERIES.md` against the Q2/Q10 schema and policies before assuming the query is wrong.
