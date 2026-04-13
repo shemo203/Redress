@@ -8,8 +8,8 @@ Ship the MVP for an Expo client backed by Supabase.
 - Publishing a post requires at least one tag.
 - Publishing a draft is atomic and must go through `publish_post(post_id)` checks.
 - Grades are whole numbers from 1 to 10.
-- Each user can grade a post once.
-- A submitted grade is final for MVP (no edit/delete flow).
+- Each user has one active grade per post.
+- Users can update their own grade; the latest saved value is the active one for averages.
 - Links must be checked for safety before users are sent outbound.
 - Outbound link clicks must be logged.
 - Users can report posts or other unsafe content.
@@ -31,9 +31,9 @@ Ship the MVP for an Expo client backed by Supabase.
   - any provided URL must still be `http://` or `https://`
 
 ## Q8 Grading UX Rules
-- Grading UI shows values `1..10` on published posts in feed cards.
-- Users can submit only one grade per post; after a grade exists, further attempts are blocked and the UI shows `Already graded`.
-- If DB rejects a duplicate grade, UI shows `Already graded` and does not retry.
+- Grading UI uses a slider with values `1..10` on published posts in feed cards.
+- Users can save a rating and later update it from the same sheet.
+- The database still stores one grade row per user/post; re-rating updates the existing row instead of creating a duplicate.
 - Average grade is displayed per post and rounded to one decimal place.
 - Grade submission has short client cooldown to reduce rapid repeat taps.
 

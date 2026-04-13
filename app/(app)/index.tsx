@@ -27,6 +27,7 @@ import {
   type ReportTargetType,
 } from "../../src/features/reports";
 import { supabase } from "../../src/lib/supabaseClient";
+import { GradeSlider } from "../../src/ui";
 import { validateClothingTagUrl } from "../../src/utils";
 
 const PAGE_SIZE = 8;
@@ -61,7 +62,6 @@ type FeedVideoCardProps = {
   active: boolean;
   avgGradeText: string;
   captionExpanded: boolean;
-  gradeLocked: boolean;
   height: number;
   onOpenGradeSheet: () => void;
   onReportPost: () => void;
@@ -95,7 +95,6 @@ function FeedVideoCard({
   active,
   avgGradeText,
   captionExpanded,
-  gradeLocked,
   height,
   onOpenGradeSheet,
   onReportPost,
@@ -229,6 +228,7 @@ export default function FeedScreen() {
   );
   const [gradeSheetVisible, setGradeSheetVisible] = useState(false);
   const [gradeSheetPostId, setGradeSheetPostId] = useState<string | null>(null);
+  const [gradeDraftValue, setGradeDraftValue] = useState(5);
   const [gradeMessageByPost, setGradeMessageByPost] = useState<
     Record<string, string | null>
   >({});
@@ -262,6 +262,9 @@ export default function FeedScreen() {
   const activePost = posts[activeIndex] ?? null;
   const gradeSheetPost =
     posts.find((post) => post.id === gradeSheetPostId) ?? activePost ?? null;
+  const gradeSheetStats = gradeSheetPost
+    ? gradeStatsByPost[gradeSheetPost.id]
+    : undefined;
 
   const openReportComposer = (draft: ReportDraft) => {
     setReportDraft(draft);
@@ -408,27 +411,65 @@ export default function FeedScreen() {
     void loadPosts(0, true);
   }, []);
 
+  const insertGradeDirect = async (postId: string, value: number) => {
+    return supabase.from("grades").insert({
+      post_id: postId,
+      user_id: user!.id,
+      value,
+    });
+  };
+
+  const updateGradeDirect = async (postId: string, value: number) => {
+    return supabase
+      .from("grades")
+      .update({ value })
+      .eq("post_id", postId)
+      .eq("user_id", user!.id);
+  };
+
+  const saveGradeDirect = async (
+    postId: string,
+    value: number,
+    hadExistingGrade: boolean
+  ) => {
+    if (hadExistingGrade) {
+      return updateGradeDirect(postId, value);
+    }
+
+    const insertResult = await insertGradeDirect(postId, value);
+    if (!insertResult.error) {
+      return insertResult;
+    }
+
+    const message = (insertResult.error.message ?? "").toLowerCase();
+    if (message.includes("duplicate key")) {
+      return updateGradeDirect(postId, value);
+    }
+
+    return insertResult;
+  };
+
   const submitGrade = async (postId: string, value: number) => {
-    if (value < 1 || value > 10) {
+    if (!Number.isInteger(value) || value < 1 || value > 10) {
       setGradeMessageByPost((current) => ({
         ...current,
-        [postId]: "Pick a number from 1 to 10.",
+        [postId]: "Pick a whole number from 1 to 10.",
       }));
-      return;
+      return false;
     }
     if (!user) {
       setGradeMessageByPost((current) => ({
         ...current,
         [postId]: "Sign in required.",
       }));
-      return;
+      return false;
     }
-    if (gradeStatsByPost[postId]?.userGrade != null) {
+    if (gradeStatsByPost[postId]?.userGrade === value) {
       setGradeMessageByPost((current) => ({
         ...current,
-        [postId]: "Already graded.",
+        [postId]: "That rating is already saved.",
       }));
-      return;
+      return true;
     }
 
     const now = Date.now();
@@ -436,51 +477,109 @@ export default function FeedScreen() {
     if (now < cooldownUntil) {
       setGradeMessageByPost((current) => ({
         ...current,
-        [postId]: "Please wait before grading again.",
+        [postId]: "Please wait before saving again.",
       }));
-      return;
+      return false;
     }
 
-    gradeCooldownUntilRef.current[postId] = now + 2500;
+    const hadExistingGrade = gradeStatsByPost[postId]?.userGrade != null;
+
+    gradeCooldownUntilRef.current[postId] = now + 1500;
     setGradeSubmittingPostId(postId);
     setGradeMessageByPost((current) => ({
       ...current,
       [postId]: null,
     }));
 
-    const { error } = await supabase.from("grades").insert({
+    const rpcResult = await supabase.rpc("set_grade", {
+      grade_value: value,
       post_id: postId,
-      user_id: user.id,
-      value,
     });
+    let error = rpcResult.error;
+
+    if (error) {
+      const directResult = await saveGradeDirect(postId, value, hadExistingGrade);
+      error = directResult.error;
+    }
 
     setGradeSubmittingPostId(null);
 
     if (error) {
-      const duplicate =
-        error.code === "23505" ||
-        (error.message ?? "").toLowerCase().includes("duplicate");
-      if (duplicate) {
+      const message = (error.message ?? "").toLowerCase();
+      const debugSuffix =
+        __DEV__ && error.message
+          ? ` (${error.message})`
+          : "";
+      if (__DEV__) {
+        console.error("Failed to save rating", {
+          code: "code" in error ? error.code : undefined,
+          details: "details" in error ? error.details : undefined,
+          hint: "hint" in error ? error.hint : undefined,
+          message: error.message,
+        });
+      }
+      if (message.includes("auth_required")) {
         setGradeMessageByPost((current) => ({
           ...current,
-          [postId]: "Already graded.",
+          [postId]: "Sign in required.",
         }));
-        await refreshGradeStats([postId]);
-        return;
+        return false;
       }
-
+      if (message.includes("invalid_grade_value")) {
+        setGradeMessageByPost((current) => ({
+          ...current,
+          [postId]: "Pick a whole number from 1 to 10.",
+        }));
+        return false;
+      }
+      if (
+        message.includes("invalid input syntax") ||
+        message.includes("violates check constraint") ||
+        message.includes("null value")
+      ) {
+        setGradeMessageByPost((current) => ({
+          ...current,
+          [postId]: "Pick a whole number from 1 to 10.",
+        }));
+        return false;
+      }
+      if (
+        message.includes("post_not_found") ||
+        message.includes("post_not_published")
+      ) {
+        setGradeMessageByPost((current) => ({
+          ...current,
+          [postId]: "This post is not available for rating.",
+        }));
+        return false;
+      }
+      if (
+        message.includes("row-level security") ||
+        message.includes("permission denied") ||
+        message.includes("set_grade") ||
+        message.includes("schema cache")
+      ) {
+        setGradeMessageByPost((current) => ({
+          ...current,
+          [postId]: "Rating updates need the latest database migration.",
+        }));
+        return false;
+      }
       setGradeMessageByPost((current) => ({
         ...current,
-        [postId]: "Could not submit grade. Check connection and try again.",
+        [postId]: __DEV__
+          ? `Could not save rating.${debugSuffix}`
+          : "Could not save rating. Check connection and try again.",
       }));
-      return;
+      return false;
     }
 
     setGradeMessageByPost((current) => ({
       ...current,
-      [postId]: "Grade submitted.",
+      [postId]: hadExistingGrade ? "Rating updated." : "Rating saved.",
     }));
     await refreshGradeStats([postId]);
+    return true;
   };
 
   const openRevealSheet = () => {
@@ -489,8 +588,34 @@ export default function FeedScreen() {
   };
 
   const openGradeSheet = (postId: string) => {
+    const stats = gradeStatsByPost[postId];
     setGradeSheetPostId(postId);
+    setGradeDraftValue(
+      Math.max(1, Math.min(10, stats?.userGrade ?? Math.round(stats?.avg ?? 5)))
+    );
+    setGradeMessageByPost((current) => ({
+      ...current,
+      [postId]: null,
+    }));
     setGradeSheetVisible(true);
+  };
+
+  const handleGradeComplete = async (nextValue: number) => {
+    if (!gradeSheetPost) {
+      return;
+    }
+
+    setGradeDraftValue(nextValue);
+
+    if (gradeSheetStats?.userGrade === nextValue) {
+      setGradeSheetVisible(false);
+      return;
+    }
+
+    const success = await submitGrade(gradeSheetPost.id, nextValue);
+    if (success) {
+      setGradeSheetVisible(false);
+    }
   };
 
   const handleSubmitReport = async ({
@@ -653,7 +778,6 @@ export default function FeedScreen() {
             topInset={insets.top}
             avgGradeText={stats?.avg != null ? stats.avg.toFixed(1) : "—"}
             userGrade={stats?.userGrade ?? null}
-            gradeLocked={stats?.userGrade != null}
           />
           );
         }}
@@ -701,107 +825,38 @@ export default function FeedScreen() {
 
       <Modal
         visible={gradeSheetVisible}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={() => setGradeSheetVisible(false)}
       >
         <Pressable
-          style={styles.sheetBackdrop}
+          style={styles.gradeBackdrop}
           onPress={() => setGradeSheetVisible(false)}
         >
-          <Pressable style={styles.sheetPanel} onPress={() => {}}>
-            <Text style={styles.sheetTitle}>Grade this fit</Text>
-            <Text style={styles.sheetSubTitle}>
-              {gradeSheetPost ? `@${gradeSheetPost.creator_username}` : "No post selected"}
-            </Text>
+          <Pressable
+            style={[
+              styles.gradePanel,
+              gradeSheetPost && gradeSubmittingPostId === gradeSheetPost.id
+                ? styles.gradePanelBusy
+                : undefined,
+            ]}
+            onPress={() => {}}
+          >
+            <Text style={styles.gradeValue}>{gradeDraftValue}</Text>
+            <GradeSlider
+              disabled={!gradeSheetPost || gradeSubmittingPostId === gradeSheetPost.id}
+              onChange={setGradeDraftValue}
+              onSlidingComplete={(nextValue) => {
+                void handleGradeComplete(nextValue);
+              }}
+              value={gradeDraftValue}
+            />
 
-            <Text style={styles.sheetScoreText}>
-              Avg. {gradeSheetPost ? gradeStatsByPost[gradeSheetPost.id]?.avg?.toFixed(1) ?? "—" : "—"}
-              {gradeSheetPost
-                ? gradeStatsByPost[gradeSheetPost.id]?.userGrade != null
-                  ? `  •  Yours ${gradeStatsByPost[gradeSheetPost.id]?.userGrade}`
-                  : ""
-                : ""}
-            </Text>
-
-            <View style={styles.sheetGradeRow}>
-              {[1, 2, 3, 4, 5].map((value) => (
-                <Pressable
-                  key={`sheet-grade-${value}`}
-                  onPress={() => {
-                    if (!gradeSheetPost) {
-                      return;
-                    }
-                    void submitGrade(gradeSheetPost.id, value);
-                  }}
-                  disabled={!gradeSheetPost || gradeSubmittingPostId === gradeSheetPost.id}
-                  style={[
-                    styles.sheetGradeChip,
-                    gradeSheetPost &&
-                    gradeStatsByPost[gradeSheetPost.id]?.userGrade === value
-                      ? styles.sheetGradeChipActive
-                      : undefined,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.sheetGradeChipText,
-                      gradeSheetPost &&
-                      gradeStatsByPost[gradeSheetPost.id]?.userGrade === value
-                        ? styles.sheetGradeChipTextActive
-                        : undefined,
-                    ]}
-                  >
-                    {value}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <View style={styles.sheetGradeRow}>
-              {[6, 7, 8, 9, 10].map((value) => (
-                <Pressable
-                  key={`sheet-grade-${value}`}
-                  onPress={() => {
-                    if (!gradeSheetPost) {
-                      return;
-                    }
-                    void submitGrade(gradeSheetPost.id, value);
-                  }}
-                  disabled={!gradeSheetPost || gradeSubmittingPostId === gradeSheetPost.id}
-                  style={[
-                    styles.sheetGradeChip,
-                    gradeSheetPost &&
-                    gradeStatsByPost[gradeSheetPost.id]?.userGrade === value
-                      ? styles.sheetGradeChipActive
-                      : undefined,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.sheetGradeChipText,
-                      gradeSheetPost &&
-                      gradeStatsByPost[gradeSheetPost.id]?.userGrade === value
-                        ? styles.sheetGradeChipTextActive
-                        : undefined,
-                    ]}
-                  >
-                    {value}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {gradeSheetPost ? (
+            {gradeSheetPost && gradeMessageByPost[gradeSheetPost.id] ? (
               <Text
-                style={
-                  gradeMessageByPost[gradeSheetPost.id]
-                    ? styles.sheetMessage
-                    : styles.sheetHelperText
-                }
+                style={styles.gradeInlineMessage}
               >
-                {gradeMessageByPost[gradeSheetPost.id] ??
-                  "Tap a score to rate the fit. Ratings save once."}
+                {gradeMessageByPost[gradeSheetPost.id]}
               </Text>
             ) : null}
           </Pressable>
@@ -956,6 +1011,44 @@ const styles = StyleSheet.create({
     top: 18,
     zIndex: 20,
   },
+  gradeBackdrop: {
+    backgroundColor: "rgba(15,10,8,0.10)",
+    flex: 1,
+    justifyContent: "flex-end",
+    paddingBottom: 38,
+    paddingHorizontal: 18,
+  },
+  gradeInlineMessage: {
+    color: theme.color.accentBright,
+    fontSize: 11,
+    marginTop: 12,
+    textAlign: "center",
+  },
+  gradePanel: {
+    backgroundColor: "rgba(255, 250, 246, 0.98)",
+    borderColor: "rgba(216, 206, 194, 0.84)",
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 14,
+    shadowColor: "#6e564b",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  gradePanelBusy: {
+    opacity: 0.88,
+  },
+  gradeValue: {
+    color: theme.color.accentBright,
+    fontFamily: "serif",
+    fontSize: 38,
+    fontWeight: "700",
+    lineHeight: 40,
+    textAlign: "center",
+  },
   footer: {
     alignItems: "center",
     backgroundColor: theme.color.shell,
@@ -1035,36 +1128,6 @@ const styles = StyleSheet.create({
   sheetEmpty: {
     color: theme.color.inkSoft,
     marginTop: 12,
-  },
-  sheetGradeChip: {
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.92)",
-    borderRadius: theme.radius.pill,
-    marginRight: 10,
-    marginTop: 10,
-    minWidth: 48,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-  },
-  sheetGradeChipActive: {
-    backgroundColor: theme.color.accentBright,
-  },
-  sheetGradeChipText: {
-    color: theme.color.ink,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  sheetGradeChipTextActive: {
-    color: theme.color.white,
-  },
-  sheetGradeRow: {
-    flexDirection: "row",
-    marginTop: 2,
-  },
-  sheetHelperText: {
-    color: theme.color.inkSoft,
-    fontSize: 13,
-    marginTop: 14,
   },
   sheetMessage: {
     color: theme.color.accentBright,

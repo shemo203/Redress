@@ -107,7 +107,7 @@ As a viewer, I want to scroll through outfit videos continuously so discovery fe
 As a viewer, I want to grade an outfit from 1 to 10 so I can express my opinion.
 As a viewer, I want to reveal the tagged items in a video so I can identify the outfit pieces.
 As a viewer, I want to tap a tagged item and open the external brand/product page.
-As a viewer, I want to know that I can only grade once so scores feel fair.
+As a viewer, I want there to be only one active grade per user so scores feel fair, while still being able to revise my own rating.
 Platform/Admin Stories
 As the platform, I want to prevent duplicate grading from the same account on the same post.
 As the platform, I want to block explicit or offensive content.
@@ -210,7 +210,7 @@ This system validates whether fashion content can drive shopping behavior, even 
 Description
 Instead of likes, users grade outfits on a 1–10 scale.
 Requirements
-Each authenticated user can grade a specific outfit only once
+Each authenticated user has one active grade for a specific outfit
 Allowed values: integers 1 through 10
 Public score displayed as average rating, rounded to one decimal place
 Example visible score: 9.2
@@ -218,7 +218,7 @@ Users do not see rating distribution in MVP
 Likes are not supported in MVP
 Integrity Rules
 no duplicate grades from same user on same post,
-users may not edit grades in MVP unless product decides otherwise later,
+users may update their own existing grade,
 anti-bot and rate-limiting rules apply,
 suspicious grading behavior should be flagged.
 Product Rationale
@@ -304,7 +304,7 @@ optionally warn users before leaving app,
 log outbound clicks for abuse analysis,
 prevent javascript or disguised redirects.
 8.6 Abuse Prevention
-one grade per user per outfit,
+one active grade row per user per outfit,
 rate limiting on grading and posting,
 device/IP abuse detection where legally appropriate,
 bot detection for suspicious account creation,
@@ -459,7 +459,7 @@ Before public MVP launch, the product should meet the following:
 users can sign up and log in reliably,
 videos upload and play correctly,
 creators cannot publish without at least one tag,
-users cannot grade the same outfit twice,
+users have one active grade per outfit and can update it,
 average score displays correctly,
 outbound links open safely,
 report flow works,

@@ -4,6 +4,10 @@
 Q2 is implemented in migration:
 - `supabase/migrations/20260305000100_q2_core_schema.sql`
 
+Later behavior changes:
+- `supabase/migrations/20260405000100_q8_set_grade_rpc.sql`
+- `supabase/migrations/20260405000200_q8_grades_update_policy.sql`
+
 ## Core Tables
 
 ### profiles
@@ -44,7 +48,7 @@ Q2 is implemented in migration:
 - `user_id uuid` references `auth.users(id)` on delete cascade
 - `value integer` required, constrained `1..10`
 - `created_at timestamptz` default `now()`
-- unique constraint: `unique(user_id, post_id)` (grade once per user/post)
+- unique constraint: `unique(user_id, post_id)` (one active grade row per user/post)
 
 ### reports
 - `id uuid` primary key, default `gen_random_uuid()`
@@ -76,6 +80,7 @@ Q2 is implemented in migration:
 ## Integrity Rules Enforced In DB
 1. One grade per user per post:
    - `grades unique(user_id, post_id)`
+   - updates reuse the same row through RPC `public.set_grade(post_id uuid, grade_value integer)`
 2. Grade value is integer 1..10:
    - `grades.value check (value between 1 and 10)`
 3. Post status is constrained:
@@ -100,7 +105,7 @@ RLS is enabled on:
 - `grades`: `anon/authenticated` can `select` grades only for published posts
 
 ### Authenticated writes
-- `grades`: insert allowed only when `user_id = auth.uid()` and post is published
+- `grades`: direct insert allowed only when `user_id = auth.uid()` and post is published; authenticated users can also update their own grade on published posts, and the primary client edit flow uses `public.set_grade()`
 - `video_posts`: creators can create/update/delete only their own drafts (direct publish via normal `update` is blocked)
 - `clothing_tags`: creators can insert/update/delete their own tags only on their own draft posts
 - `reports`: insert only when `reporter_id = auth.uid()`; authenticated users can `select` only their own reports for debug/verification
@@ -115,4 +120,14 @@ RLS is enabled on:
 - requires at least one tag in `clothing_tags`
 - updates `status='published'`, sets `published_at`, and returns updated row
 - is the only supported publish path (RLS update policy keeps client updates in draft-only state)
+- runs as `security definer`; execute granted to `authenticated` only
+
+## RPC: set_grade(post_id uuid, grade_value integer)
+`public.set_grade(post_id uuid, grade_value integer)`:
+- requires authentication
+- requires the target post to exist and be published
+- requires `grade_value` be an integer `1..10`
+- inserts a new grade row for the caller when none exists
+- updates the caller's existing grade row when one already exists
+- preserves the one-row-per-user/post integrity rule through `unique(user_id, post_id)`
 - runs as `security definer`; execute granted to `authenticated` only

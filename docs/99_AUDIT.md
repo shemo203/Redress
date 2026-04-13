@@ -52,10 +52,10 @@ Scope:
 | Reveal Items sheet lists tagged items | Done | `app/(app)/index.tsx` |
 | Tapping a tagged item opens external page | Done | `app/(app)/index.tsx`, `expo-web-browser` |
 | 1 to 10 grading only | Done | `app/(app)/index.tsx`, `public.grades` check in `supabase/migrations/20260305000100_q2_core_schema.sql` |
-| One grade per user per outfit | Done | `public.grades unique(user_id, post_id)`, `grades_insert_own_user` policy, duplicate handling in `app/(app)/index.tsx` |
+| One active grade per user per outfit | Done | `public.grades unique(user_id, post_id)`, `public.set_grade()` in `supabase/migrations/20260405000100_q8_set_grade_rpc.sql`, grading sheet in `app/(app)/index.tsx` |
 | Average grade displayed rounded to one decimal | Done | `app/(app)/index.tsx` |
 | No likes in MVP | Done | No like model or UI found; feed interaction is grading only |
-| No grade edit/delete flow in MVP | Done | No update/delete policies on `grades`; no UI for editing grades |
+| Users can update their own grade | Done | `public.set_grade()` in `supabase/migrations/20260405000100_q8_set_grade_rpc.sql`, slider grading sheet in `app/(app)/index.tsx` |
 | Anti-bot / rate-limiting around grading and posting | Partial | Short client cooldown for grading in `app/(app)/index.tsx`; no server-side rate limiting found |
 | Profile page exists | Done | `app/(app)/account.tsx` |
 | Profile shows posted outfit videos | Partial | `app/(app)/account.tsx` shows recent fits, but not a dedicated full profile/content browser |
@@ -95,8 +95,9 @@ Scope:
 - Confirmed in DB:
   - `public.grades` has `unique (user_id, post_id)` in [supabase/migrations/20260305000100_q2_core_schema.sql](/Users/sherwan/Desktop/Redress/supabase/migrations/20260305000100_q2_core_schema.sql)
   - `value` is constrained to `1..10`
+  - `public.set_grade(post_id, grade_value)` inserts or updates the caller's single grade row in [supabase/migrations/20260405000100_q8_set_grade_rpc.sql](/Users/sherwan/Desktop/Redress/supabase/migrations/20260405000100_q8_set_grade_rpc.sql)
 - Confirmed in app:
-  - Feed grading UI blocks repeat grading and maps duplicate DB failures to `Already graded` in [app/(app)/index.tsx](/Users/sherwan/Desktop/Redress/app/(app)/index.tsx)
+  - Feed grading UI uses a slider and save/update CTA, then refreshes the visible average and saved rating in [app/(app)/index.tsx](/Users/sherwan/Desktop/Redress/app/(app)/index.tsx)
 - Audit result: `Confirmed`
 
 ### Cannot publish without >= 1 tag
@@ -135,7 +136,7 @@ Scope:
 | `profiles` | Authenticated users can read all profiles | Authenticated users can insert only own row (`id = auth.uid()`) | Authenticated users can update only own row | No delete policy | Reasonable for social discovery. No explicit self-delete path in app |
 | `video_posts` | Public can read published posts; authenticated users can also read own posts | Authenticated users can insert only own drafts | Authenticated users can update only own drafts | Authenticated users can delete only own drafts | Good protection around publish integrity; published content is immutable from normal client writes |
 | `clothing_tags` | Public can read tags for published posts; authenticated users can also read own tags | Authenticated users can insert only own tags on own draft posts | Authenticated users can update only own tags on own draft posts | Authenticated users can delete only own tags on own draft posts | Good ownership model. Final behavior depends on the optional-URL migration being applied |
-| `grades` | Public/authenticated can read grades for published posts | Authenticated users can insert only own grades for published posts | No update policy | No delete policy | Strong integrity. Potential exposure gap: raw grade rows are readable even though UI hides distribution |
+| `grades` | Public/authenticated can read grades for published posts | Authenticated users can insert only own grades for published posts | Authenticated users can update only their own grades for published posts | No delete policy | Strong integrity. Potential exposure gap: raw grade rows are readable even though UI hides distribution |
 | `reports` | Authenticated users can read only their own reports | Authenticated users can insert only own reports | No update policy | No delete policy | Safe for normal clients. Admin review path is not exposed in-app and depends on dashboard/service-role access |
 | `outbound_clicks` | No read policy | Authenticated users can insert only own clicks for published posts | No update policy | No delete policy | Privacy-friendly for client apps. Analytics reads require service-role or SQL editor access |
 
@@ -212,7 +213,7 @@ Verify on-device:
 6. Active video autoplays and inactive video pauses
 7. Reveal Items opens quickly
 8. Safe links open; empty-link tags are non-clickable if that flag is off
-9. Grading works once and shows `Already graded` on repeat
+9. Grading saves, average updates correctly, and re-rating updates the existing score
 10. Average score updates correctly
 11. Reporting works for post, profile, and link
 12. Sign out and password reset still work

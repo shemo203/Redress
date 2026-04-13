@@ -26,9 +26,18 @@ For `clothing_tags.url`, the client validation now enforces:
 - Save the trimmed normalized value only after all checks pass.
 
 ## Abuse controls
-- One grade per user per post (unique + RLS)
+- One active grade row per user per post (unique + RPC-backed upsert)
 - Rate limiting (MVP: client throttling + server checks where feasible)
 - Reporting for posts/profiles/links
+
+## Grading integrity
+- Grades are limited to integers `1..10`.
+- The app now uses a save/update grading flow instead of one-time-only submission.
+- `public.set_grade(post_id, grade_value)` enforces:
+  - authenticated user required
+  - target post must exist and be published
+  - one stored grade row per user/post
+  - later rating changes update the existing row instead of inserting duplicates
 
 ## Reporting (Q10)
 - Users can report:
