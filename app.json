@@ -6,8 +6,17 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "plugins": [
-      "expo-router"
-    ]
+    "plugins": ["expo-router"],
+    "platforms": ["ios", "android"],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3b99cba8-6f92-44f8-a8e8-c8494e78b72b"
+      }
+    },
+    "runtimeVersion": { "policy": "appVersion" },
+    "updates": { "url": "https://u.expo.dev/3b99cba8-6f92-44f8-a8e8-c8494e78b72b" },
+    "android": {},
+    "ios": {}
   }
 }
