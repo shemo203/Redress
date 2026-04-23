@@ -8,6 +8,7 @@ type BrandMarkProps = {
   compact?: boolean;
   elevated?: boolean;
   showLabel?: boolean;
+  showWordmark?: boolean;
   size?: number;
   variant?: "accent" | "chrome";
 };
@@ -15,6 +16,7 @@ type BrandMarkProps = {
 export function BrandMark({
   compact = false,
   elevated = false,
+  showWordmark = false,
   size = 86,
   variant = "accent",
 }: BrandMarkProps) {
@@ -29,19 +31,34 @@ export function BrandMark({
           { height: size, width: size },
         ]}
       >
-        <Image
-          source={redressLogo}
-          style={[
-            styles.logo,
-            compact ? styles.logoCompact : undefined,
-            variant === "chrome" ? styles.logoChrome : styles.logoAccent,
-            {
-              height: size * 1.6,
-              width: size * 1.6,
-            },
-          ]}
-          resizeMode="cover"
-        />
+        {showWordmark ? (
+          <Image
+            source={redressLogo}
+            style={[
+              styles.wordmarkLogo,
+              styles.wordmarkLogoTint,
+              {
+                height: size * 0.92,
+                width: size * 0.92,
+              },
+            ]}
+            resizeMode="contain"
+          />
+        ) : (
+          <Image
+            source={redressLogo}
+            style={[
+              styles.logo,
+              compact ? styles.logoCompact : undefined,
+              variant === "chrome" ? styles.logoChrome : styles.logoAccent,
+              {
+                height: size * 1.6,
+                width: size * 1.6,
+              },
+            ]}
+            resizeMode="cover"
+          />
+        )}
       </View>
     </View>
   );
@@ -61,8 +78,8 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   badgeChrome: {
-    backgroundColor: "#f1eee8",
-    borderColor: "rgba(123, 115, 107, 0.22)",
+    backgroundColor: "#efdbb9",
+    borderColor: "rgba(194, 162, 132, 0.32)",
   },
   badgeElevated: {
     shadowColor: "#7f6658",
@@ -86,5 +103,11 @@ const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
     justifyContent: "center",
+  },
+  wordmarkLogo: {
+    marginTop: 2,
+  },
+  wordmarkLogoTint: {
+    tintColor: theme.color.accentBright,
   },
 });

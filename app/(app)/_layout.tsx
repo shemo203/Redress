@@ -1,12 +1,26 @@
 import { Redirect, Slot } from "expo-router";
+import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 import { theme } from "../../src/constants";
+import { logAppOpenBestEffort } from "../../src/features/analytics";
 import { useAuth } from "../../src/features/auth";
 import { AppDock } from "../../src/ui";
 
 export default function AppLayout() {
-  const { isLoading, session } = useAuth();
+  const { isLoading, session, user } = useAuth();
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    void logAppOpenBestEffort({ userId: user.id }).then((result) => {
+      if (__DEV__ && result.error) {
+        console.error("Failed to log app open", result.error);
+      }
+    });
+  }, [user?.id]);
 
   if (isLoading) {
     return (
@@ -37,7 +51,6 @@ const styles = StyleSheet.create({
   },
   contentWrap: {
     flex: 1,
-    paddingBottom: 66,
   },
   loaderWrap: {
     alignItems: "center",

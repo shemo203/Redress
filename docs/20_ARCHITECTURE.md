@@ -48,13 +48,15 @@ src/
 - Main feed reads `video_posts` with `status='published'`, ordered by `created_at desc`.
 - Client pagination uses simple limit/offset (`range(from, to)` in Supabase JS).
 - Feed UI uses vertical paging (`FlatList` with one-post-per-screen behavior).
-- Authenticated app shell uses a persistent bottom dock:
-  - center Redress brand button routes to feed
-  - left plus button routes to new post/upload
-  - right profile button routes to account/profile
+- Authenticated app shell uses a floating three-circle dock:
+  - center oversized Redress brand badge routes to feed
+  - left circle routes to new post/upload
+  - right circle routes to account/profile
 - Feed presentation keeps the video dominant:
-  - slim translucent top strip for tags and quick actions
-  - bottom caption block with expand/collapse behavior
+  - full-screen cards so adjacent posts do not peek underneath
+  - centered beige creator card at the top
+  - soft floating side actions for items, grading, and reporting
+  - bottom caption card with expand/collapse behavior
   - grading opens from a slide-up sheet instead of always showing chips on-card
 - Performance approach:
   - Keep list window small (`windowSize`, batch limits).

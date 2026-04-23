@@ -19,6 +19,7 @@ import {
 } from "../../src/constants";
 import { useAuth } from "../../src/features/auth";
 import { supabase } from "../../src/lib/supabaseClient";
+import { BrandMark } from "../../src/ui";
 import { validateClothingTagUrl } from "../../src/utils";
 
 const MAX_VIDEO_BYTES = 250 * 1024 * 1024;
@@ -383,7 +384,13 @@ export default function UploadScreen() {
       <View style={styles.heroGlow} />
 
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Post Your Fit</Text>
+        <View style={styles.titleWrap}>
+          <BrandMark compact size={48} variant="chrome" />
+          <View>
+            <Text style={styles.eyebrow}>Create</Text>
+            <Text style={styles.title}>Post Your Fit</Text>
+          </View>
+        </View>
         <Pressable
           onPress={() => router.replace("/(app)")}
           style={styles.closeButton}
@@ -636,6 +643,10 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     alignItems: "center",
+    backgroundColor: "rgba(255,250,246,0.88)",
+    borderColor: "rgba(216,206,194,0.9)",
+    borderRadius: 999,
+    borderWidth: 1,
     height: 40,
     justifyContent: "center",
     width: 40,
@@ -662,11 +673,19 @@ const styles = StyleSheet.create({
     color: theme.color.muted,
     marginTop: 10,
   },
+  eyebrow: {
+    color: theme.color.inkSoft,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    marginBottom: 2,
+    textTransform: "uppercase",
+  },
   headerRow: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 20,
+    marginBottom: 18,
   },
   helperText: {
     color: theme.color.muted,
@@ -675,17 +694,17 @@ const styles = StyleSheet.create({
     marginTop: -2,
   },
   heroGlow: {
-    backgroundColor: "rgba(241, 226, 215, 0.7)",
+    backgroundColor: "rgba(236, 221, 205, 0.66)",
     borderRadius: 260,
-    height: 320,
-    left: 90,
+    height: 280,
+    left: 78,
     position: "absolute",
-    top: 90,
-    width: 320,
+    top: 84,
+    width: 280,
   },
   input: {
-    backgroundColor: "rgba(255,250,246,0.98)",
-    borderColor: theme.color.border,
+    backgroundColor: "rgba(255,250,246,0.92)",
+    borderColor: "rgba(216,206,194,0.9)",
     borderRadius: theme.radius.md,
     borderWidth: 1,
     color: theme.color.ink,
@@ -709,9 +728,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   metaWrap: {
-    backgroundColor: "rgba(255,249,243,0.92)",
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
+    backgroundColor: "rgba(255,249,243,0.82)",
+    borderColor: "rgba(216,206,194,0.8)",
+    borderRadius: 16,
     borderWidth: 1,
     gap: 4,
     marginTop: 10,
@@ -734,14 +753,14 @@ const styles = StyleSheet.create({
   panelTitle: {
     color: theme.color.ink,
     fontFamily: "serif",
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "700",
-    marginTop: 20,
+    marginTop: 18,
   },
   primaryButton: {
     alignItems: "center",
-    backgroundColor: theme.color.bgPanel,
-    borderColor: theme.color.border,
+    backgroundColor: "rgba(255,249,243,0.9)",
+    borderColor: "rgba(216,206,194,0.92)",
     borderRadius: theme.radius.pill,
     borderWidth: 1,
     marginTop: 8,
@@ -764,8 +783,8 @@ const styles = StyleSheet.create({
   },
   secondaryCtaButton: {
     alignItems: "center",
-    backgroundColor: "rgba(255,249,243,0.92)",
-    borderColor: theme.color.border,
+    backgroundColor: "rgba(255,249,243,0.82)",
+    borderColor: "rgba(216,206,194,0.88)",
     borderRadius: theme.radius.pill,
     borderWidth: 1,
     marginTop: 10,
@@ -793,7 +812,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: theme.color.ink,
     fontFamily: "serif",
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "700",
   },
   smallButton: {
@@ -823,12 +842,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   successWrap: {
-    backgroundColor: "rgba(255,249,243,0.92)",
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
+    backgroundColor: "rgba(255,249,243,0.84)",
+    borderColor: "rgba(216,206,194,0.88)",
+    borderRadius: 18,
     borderWidth: 1,
     marginTop: 16,
-    padding: 12,
+    padding: 14,
   },
   tagActions: {
     flexDirection: "row",
@@ -836,9 +855,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   tagCard: {
-    backgroundColor: "rgba(255,249,243,0.92)",
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.lg,
+    backgroundColor: "rgba(255,249,243,0.82)",
+    borderColor: "rgba(216,206,194,0.88)",
+    borderRadius: 18,
     borderWidth: 1,
     marginTop: 10,
     padding: 12,
@@ -859,16 +878,21 @@ const styles = StyleSheet.create({
   title: {
     color: theme.color.ink,
     fontFamily: "serif",
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "700",
+  },
+  titleWrap: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
   },
   uploadBadge: {
     alignItems: "center",
-    backgroundColor: "rgba(140,120,110,0.10)",
+    backgroundColor: "rgba(140,120,110,0.08)",
     borderRadius: 999,
-    height: 92,
+    height: 84,
     justifyContent: "center",
-    width: 92,
+    width: 84,
   },
   uploadBadgeArrow: {
     color: theme.color.inkSoft,
@@ -881,12 +905,12 @@ const styles = StyleSheet.create({
   },
   uploadPanel: {
     alignItems: "center",
-    backgroundColor: "rgba(245,238,231,0.94)",
-    borderColor: theme.color.border,
-    borderRadius: 34,
+    backgroundColor: "rgba(245,238,231,0.86)",
+    borderColor: "rgba(216,206,194,0.82)",
+    borderRadius: 28,
     borderStyle: "dashed",
-    borderWidth: 2,
-    height: 420,
+    borderWidth: 1.5,
+    height: 396,
     justifyContent: "center",
     overflow: "hidden",
     padding: 24,

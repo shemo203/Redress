@@ -1,13 +1,18 @@
-import { Link, useFocusEffect } from "expo-router";
+import { Link, useFocusEffect, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -16,10 +21,19 @@ import { VideoView, useVideoPlayer } from "expo-video";
 
 import { theme } from "../../src/constants";
 import {
+  logPostImpressionBestEffort,
   logOutboundClickBestEffort,
+  logTagRevealBestEffort,
   shouldLogOutboundClick,
 } from "../../src/features/analytics";
 import { useAuth } from "../../src/features/auth";
+import {
+  addCommentToPost,
+  COMMENT_MAX_LENGTH,
+  fetchCommentCountsForPosts,
+  listCommentsForPost,
+  type SocialComment,
+} from "../../src/features/social";
 import {
   buildLinkReportDetails,
   ReportComposer,
@@ -27,7 +41,7 @@ import {
   type ReportTargetType,
 } from "../../src/features/reports";
 import { supabase } from "../../src/lib/supabaseClient";
-import { GradeSlider } from "../../src/ui";
+import { GradeSlider, ProfileAvatar } from "../../src/ui";
 import { validateClothingTagUrl } from "../../src/utils";
 
 const PAGE_SIZE = 8;
@@ -58,12 +72,31 @@ type ReportDraft = {
   title: string;
 };
 
+type CommentsSheetProps = {
+  comments: SocialComment[];
+  composerMessage: string | null;
+  composerText: string;
+  isLoading: boolean;
+  isRefreshing: boolean;
+  isSubmitting: boolean;
+  onChangeComposerText: (value: string) => void;
+  onClose: () => void;
+  onRefresh: () => void;
+  onSubmit: () => void;
+  post: FeedPost | null;
+  visible: boolean;
+};
+
 type FeedVideoCardProps = {
   active: boolean;
   avgGradeText: string;
   captionExpanded: boolean;
+  commentCount: number;
+  gradeCount: number;
   height: number;
+  onOpenComments: () => void;
   onOpenGradeSheet: () => void;
+  onOpenProfile: () => void;
   onReportPost: () => void;
   onReportProfile: () => void;
   onRevealItems: () => void;
@@ -95,8 +128,12 @@ function FeedVideoCard({
   active,
   avgGradeText,
   captionExpanded,
+  commentCount,
+  gradeCount,
   height,
+  onOpenComments,
   onOpenGradeSheet,
+  onOpenProfile,
   onReportPost,
   onReportProfile,
   onRevealItems,
@@ -109,11 +146,14 @@ function FeedVideoCard({
   const player = useVideoPlayer(shouldMountVideo ? post.video_url : null, (videoPlayer) => {
     videoPlayer.loop = true;
   });
-  const previewTags = post.tags.slice(0, 3);
   const captionPreview = getCaptionPreview(post.caption);
   const captionText = captionExpanded
     ? post.caption.trim() || "Fresh fit, no caption yet."
     : captionPreview.text;
+  const creatorLabel = post.creator_username.trim().toUpperCase();
+  const avatarFallback = post.creator_username.charAt(0).toUpperCase();
+  const taggedItemCopy =
+    post.tags.length === 1 ? "1 tagged item" : `${post.tags.length} tagged items`;
 
   useEffect(() => {
     if (!shouldMountVideo) {
@@ -143,54 +183,70 @@ function FeedVideoCard({
       )}
 
       <View style={styles.videoTint} />
-      <View style={[styles.topStrip, { top: topInset + 10 }]}>
-        <View style={styles.topStripTags}>
-          {previewTags.length > 0 ? (
-            previewTags.map((tag) => (
-              <View key={tag.id} style={styles.topTagChip}>
-                <Text style={styles.tagChipText}>{tag.brand ?? tag.name}</Text>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.tagChipEmpty}>No tags yet</Text>
-          )}
-        </View>
-        <View style={styles.topStripActions}>
-          <Text style={styles.topUsername}>@{post.creator_username}</Text>
-          <Pressable onPress={onRevealItems} style={styles.topActionButton}>
-            <Text style={styles.topActionText}>Items</Text>
+      <View style={[styles.creatorCardWrap, { top: topInset + 4 }]}>
+        <View style={styles.creatorCard}>
+          <Pressable onPress={onOpenProfile} style={styles.creatorMainTap}>
+            <View style={styles.creatorAvatar}>
+              <Text style={styles.creatorAvatarText}>{avatarFallback}</Text>
+            </View>
+            <View style={styles.creatorMeta}>
+              <Text numberOfLines={1} style={styles.creatorName}>
+                {creatorLabel}
+              </Text>
+            </View>
           </Pressable>
-          <Pressable onPress={onReportProfile} style={styles.topActionButtonMuted}>
-            <Text style={styles.topActionTextMuted}>Report</Text>
+          <Pressable onPress={onReportProfile} style={styles.creatorButton}>
+            <Text style={styles.creatorButtonText}>Report</Text>
           </Pressable>
         </View>
       </View>
 
       <View style={styles.sideRail}>
-        <Pressable onPress={onOpenGradeSheet} style={styles.scoreOrb}>
-          <Text style={styles.scoreOrbValue}>{avgGradeText}</Text>
-          <Text style={styles.scoreOrbLabel}>
-            {userGrade != null ? `Yours ${userGrade}` : "Tap to rate"}
+        <Pressable onPress={onRevealItems} style={styles.sidePill}>
+          <Text style={styles.sidePillLabel}>Items</Text>
+          <Text style={styles.sidePillSubLabel}>{taggedItemCopy}</Text>
+        </Pressable>
+
+        <Pressable onPress={onOpenGradeSheet} style={styles.scoreCard}>
+          <Text style={styles.scoreCardValue}>{avgGradeText}</Text>
+          <Text style={styles.scoreCardSub}>
+            {gradeCount > 0 ? String(gradeCount) : "Rate"}
           </Text>
+          {userGrade != null ? (
+            <Text style={styles.scoreCardHint}>Yours {userGrade}</Text>
+          ) : (
+            <Text style={styles.scoreCardHint}>Tap to rate</Text>
+          )}
+        </Pressable>
+
+        <Pressable onPress={onOpenComments} style={styles.sideIconButton}>
+          <Text style={styles.sideIconButtonText}>Comments</Text>
+          <Text style={styles.sideIconButtonSubText}>
+            {commentCount > 0 ? String(commentCount) : "Add"}
+          </Text>
+        </Pressable>
+
+        <Pressable onPress={onReportPost} style={styles.sideIconButton}>
+          <Text style={styles.sideIconButtonText}>Report</Text>
         </Pressable>
       </View>
 
       <View style={styles.bottomOverlay}>
-        <Text style={styles.bottomUsername}>@{post.creator_username}</Text>
-        <Pressable onPress={onToggleCaption}>
-          <Text numberOfLines={captionExpanded ? 5 : 2} style={styles.caption}>
-            {captionText}
-          </Text>
-          {captionPreview.truncated ? (
-            <Text style={styles.expandCopy}>
-              {captionExpanded ? "Show less" : "More"}
+        <View style={styles.captionCard}>
+          <Pressable onPress={onOpenProfile}>
+            <Text style={styles.bottomUsername}>@{post.creator_username}</Text>
+          </Pressable>
+          <Pressable onPress={onToggleCaption}>
+            <Text numberOfLines={captionExpanded ? 4 : 2} style={styles.caption}>
+              {captionText}
             </Text>
-          ) : null}
-        </Pressable>
-        <Pressable onPress={onReportPost} style={styles.reportTextWrap}>
-          <Text style={styles.reportText}>Report post</Text>
-        </Pressable>
-
+            {captionPreview.truncated ? (
+              <Text style={styles.expandCopy}>
+                {captionExpanded ? "Show less" : "More"}
+              </Text>
+            ) : null}
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -204,11 +260,246 @@ function videoPlayerSafePlay(player: { play: () => void }) {
   }
 }
 
-export default function FeedScreen() {
-  const { user } = useAuth();
+function videoPlayerSafePause(player: { pause: () => void }) {
+  try {
+    player.pause();
+  } catch {
+    // no-op for occasional player race during mount/unmount
+  }
+}
+
+function getRequestFailureMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return `${fallback}: ${error.message}`;
+  }
+  return fallback;
+}
+
+function formatCommentTime(dateString: string) {
+  const date = new Date(dateString);
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+
+  if (diffMinutes < 1) {
+    return "just now";
+  }
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m`;
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours}h`;
+  }
+
+  const diffDays = Math.round(diffHours / 24);
+  if (diffDays < 7) {
+    return `${diffDays}d`;
+  }
+
+  return date.toLocaleDateString();
+}
+
+function sortCommentsOldestFirst(comments: SocialComment[]) {
+  return [...comments].sort(
+    (left, right) =>
+      new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
+  );
+}
+
+function CommentsSheet({
+  comments,
+  composerMessage,
+  composerText,
+  isLoading,
+  isRefreshing,
+  isSubmitting,
+  onChangeComposerText,
+  onClose,
+  onRefresh,
+  onSubmit,
+  post,
+  visible,
+}: CommentsSheetProps) {
   const insets = useSafeAreaInsets();
+  const previewPlayer = useVideoPlayer(visible && post ? post.video_url : null, (player) => {
+    player.loop = true;
+  });
+  const remainingCharacters = COMMENT_MAX_LENGTH - composerText.length;
+
+  useEffect(() => {
+    if (!visible || !post) {
+      videoPlayerSafePause(previewPlayer);
+      return;
+    }
+
+    videoPlayerSafePlay(previewPlayer);
+    return () => {
+      videoPlayerSafePause(previewPlayer);
+    };
+  }, [post, previewPlayer, visible]);
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="fade"
+      transparent
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.commentsModalRoot}
+      >
+        <Pressable
+          style={styles.commentsBackdrop}
+          onPress={() => {
+            Keyboard.dismiss();
+          }}
+        >
+          <Pressable style={styles.commentsPreviewWrap} onPress={() => {}}>
+            {post ? (
+              <View style={styles.commentsPreviewCard}>
+                <VideoView
+                  player={previewPlayer}
+                  style={styles.commentsPreviewVideo}
+                  contentFit="cover"
+                  nativeControls={false}
+                />
+                <View style={styles.commentsPreviewTint} />
+                <View style={styles.commentsPreviewMeta}>
+                  <Text style={styles.commentsPreviewUsername}>
+                    @{post.creator_username}
+                  </Text>
+                  <Text numberOfLines={2} style={styles.commentsPreviewCaption}>
+                    {post.caption.trim() || "Fresh fit, no caption yet."}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </Pressable>
+
+          <Pressable style={styles.commentsPanel} onPress={() => {}}>
+            <View style={styles.commentsHandle} />
+            <View style={styles.commentsHeaderRow}>
+              <Text style={styles.commentsTitle}>
+                {comments.length === 1 ? "1 comment" : `${comments.length} comments`}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  Keyboard.dismiss();
+                  onClose();
+                }}
+                style={styles.commentsCloseButton}
+              >
+                <Text style={styles.commentsCloseText}>Done</Text>
+              </Pressable>
+            </View>
+
+            {isLoading ? (
+              <View style={styles.commentsStateWrap}>
+                <ActivityIndicator color={theme.color.accentBright} />
+                <Text style={styles.commentsStateText}>Loading comments…</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={comments}
+                keyExtractor={(item) => item.id}
+                keyboardShouldPersistTaps="handled"
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isRefreshing}
+                    onRefresh={onRefresh}
+                    tintColor={theme.color.accentBright}
+                  />
+                }
+                renderItem={({ item }) => (
+                  <View style={styles.commentRow}>
+                    <ProfileAvatar
+                      avatarUrl={item.user.avatar_url}
+                      size={38}
+                      username={item.user.username}
+                    />
+                    <View style={styles.commentBody}>
+                      <View style={styles.commentMetaRow}>
+                        <Text style={styles.commentUsername}>
+                          @{item.user.username}
+                        </Text>
+                        <Text style={styles.commentTime}>
+                          {formatCommentTime(item.created_at)}
+                        </Text>
+                      </View>
+                      <Text style={styles.commentText}>{item.text}</Text>
+                    </View>
+                  </View>
+                )}
+                contentContainerStyle={[
+                  styles.commentsListContent,
+                  {
+                    paddingBottom: Math.max(insets.bottom + 94, 112),
+                  },
+                ]}
+                ListEmptyComponent={
+                  <View style={styles.commentsEmptyWrap}>
+                    <Text style={styles.commentsEmptyTitle}>No comments yet</Text>
+                    <Text style={styles.commentsEmptyText}>
+                      Start the conversation with the first comment.
+                    </Text>
+                  </View>
+                }
+              />
+            )}
+
+            <View style={styles.commentsComposer}>
+              <TextInput
+                value={composerText}
+                onChangeText={onChangeComposerText}
+                onSubmitEditing={() => Keyboard.dismiss()}
+                placeholder="Add a comment"
+                placeholderTextColor={theme.color.inkSoft}
+                style={styles.commentsInput}
+                blurOnSubmit
+                multiline
+                maxLength={COMMENT_MAX_LENGTH}
+                textAlignVertical="top"
+                returnKeyType="done"
+              />
+
+              <View style={styles.commentsComposerFooter}>
+                <Text style={styles.commentsCharacterCount}>{remainingCharacters}</Text>
+                <Pressable
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    onSubmit();
+                  }}
+                  disabled={isSubmitting}
+                  style={[
+                    styles.commentsSendButton,
+                    isSubmitting ? styles.commentsSendButtonDisabled : undefined,
+                  ]}
+                >
+                  <Text style={styles.commentsSendText}>
+                    {isSubmitting ? "Sending..." : "Send"}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {composerMessage ? (
+                <Text style={styles.commentsComposerMessage}>{composerMessage}</Text>
+              ) : null}
+            </View>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+export default function FeedScreen() {
+  const router = useRouter();
+  const { profile, user } = useAuth();
   const { height } = useWindowDimensions();
-  const cardHeight = Math.max(height - 72, 520);
+  const insets = useSafeAreaInsets();
+  const cardHeight = Math.max(height, 560);
 
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [offset, setOffset] = useState(0);
@@ -238,7 +529,21 @@ export default function FeedScreen() {
   const [gradeStatsByPost, setGradeStatsByPost] = useState<
     Record<string, { avg: number | null; count: number; userGrade: number | null }>
   >({});
+  const [commentCountsByPost, setCommentCountsByPost] = useState<Record<string, number>>(
+    {}
+  );
+  const [commentsComposerMessage, setCommentsComposerMessage] = useState<string | null>(
+    null
+  );
+  const [commentsComposerText, setCommentsComposerText] = useState("");
+  const [commentsForSheet, setCommentsForSheet] = useState<SocialComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsRefreshing, setCommentsRefreshing] = useState(false);
+  const [commentsSheetPostId, setCommentsSheetPostId] = useState<string | null>(null);
+  const [commentsSheetVisible, setCommentsSheetVisible] = useState(false);
+  const [commentsSubmitting, setCommentsSubmitting] = useState(false);
   const gradeCooldownUntilRef = useRef<Record<string, number>>({});
+  const commentCooldownUntilRef = useRef<Record<string, number>>({});
 
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 80,
@@ -265,6 +570,8 @@ export default function FeedScreen() {
   const gradeSheetStats = gradeSheetPost
     ? gradeStatsByPost[gradeSheetPost.id]
     : undefined;
+  const commentsSheetPost =
+    posts.find((post) => post.id === commentsSheetPostId) ?? activePost ?? null;
 
   const openReportComposer = (draft: ReportDraft) => {
     setReportDraft(draft);
@@ -275,49 +582,102 @@ export default function FeedScreen() {
     if (postIds.length === 0) {
       return;
     }
+    try {
+      const { data, error } = await supabase
+        .from("grades")
+        .select("post_id, user_id, value")
+        .in("post_id", postIds);
 
-    const { data, error } = await supabase
-      .from("grades")
-      .select("post_id, user_id, value")
-      .in("post_id", postIds);
+      if (error) {
+        return;
+      }
 
-    if (error) {
+      const nextStats: Record<
+        string,
+        { avg: number | null; count: number; userGrade: number | null }
+      > = {};
+      postIds.forEach((postId) => {
+        nextStats[postId] = { avg: null, count: 0, userGrade: null };
+      });
+
+      const sumMap: Record<string, number> = {};
+      (data ?? []).forEach((row) => {
+        const postId = String(row.post_id);
+        if (!nextStats[postId]) {
+          nextStats[postId] = { avg: null, count: 0, userGrade: null };
+        }
+        sumMap[postId] = (sumMap[postId] ?? 0) + row.value;
+        nextStats[postId].count += 1;
+        if (user?.id && row.user_id === user.id) {
+          nextStats[postId].userGrade = row.value;
+        }
+      });
+
+      Object.keys(nextStats).forEach((postId) => {
+        const count = nextStats[postId].count;
+        if (count > 0) {
+          const avgRaw = (sumMap[postId] ?? 0) / count;
+          nextStats[postId].avg = Math.round(avgRaw * 10) / 10;
+        }
+      });
+
+      setGradeStatsByPost((current) => ({
+        ...current,
+        ...nextStats,
+      }));
+    } catch (error) {
+      if (__DEV__) {
+        console.error("Failed to refresh grade stats", error);
+      }
+    }
+  };
+
+  const refreshCommentCounts = async (postIds: string[]) => {
+    if (postIds.length === 0) {
       return;
     }
 
-    const nextStats: Record<
-      string,
-      { avg: number | null; count: number; userGrade: number | null }
-    > = {};
-    postIds.forEach((postId) => {
-      nextStats[postId] = { avg: null, count: 0, userGrade: null };
-    });
-
-    const sumMap: Record<string, number> = {};
-    (data ?? []).forEach((row) => {
-      const postId = String(row.post_id);
-      if (!nextStats[postId]) {
-        nextStats[postId] = { avg: null, count: 0, userGrade: null };
+    const result = await fetchCommentCountsForPosts(postIds);
+    if (result.error) {
+      if (__DEV__) {
+        console.error("Failed to refresh comment counts", result.error);
       }
-      sumMap[postId] = (sumMap[postId] ?? 0) + row.value;
-      nextStats[postId].count += 1;
-      if (user?.id && row.user_id === user.id) {
-        nextStats[postId].userGrade = row.value;
-      }
-    });
+      return;
+    }
 
-    Object.keys(nextStats).forEach((postId) => {
-      const count = nextStats[postId].count;
-      if (count > 0) {
-        const avgRaw = (sumMap[postId] ?? 0) / count;
-        nextStats[postId].avg = Math.round(avgRaw * 10) / 10;
-      }
-    });
-
-    setGradeStatsByPost((current) => ({
+    setCommentCountsByPost((current) => ({
       ...current,
-      ...nextStats,
+      ...result.data,
     }));
+  };
+
+  const loadCommentsForPost = async (
+    postId: string,
+    mode: "initial" | "refresh" | "silent" = "initial"
+  ) => {
+    if (mode === "initial") {
+      setCommentsLoading(true);
+    }
+    if (mode === "refresh") {
+      setCommentsRefreshing(true);
+    }
+
+    const result = await listCommentsForPost(postId, 100);
+    if (result.error) {
+      setCommentsComposerMessage(result.error);
+      if (__DEV__) {
+        console.error("Failed to load comments", result.error);
+      }
+      setCommentsLoading(false);
+      setCommentsRefreshing(false);
+      return;
+    }
+
+    setCommentsForSheet(sortCommentsOldestFirst(result.data));
+    setCommentsComposerMessage(null);
+    setCommentsLoading(false);
+    setCommentsRefreshing(false);
+    await refreshCommentCounts([postId]);
   };
 
   useFocusEffect(
@@ -325,11 +685,13 @@ export default function FeedScreen() {
       setIsFeedFocused(true);
       if (posts.length === 0 && !isLoading) {
         void loadPosts(0, true);
+      } else if (posts.length > 0) {
+        void refreshCommentCounts(posts.map((post) => post.id));
       }
       return () => {
         setIsFeedFocused(false);
       };
-    }, [isLoading, posts.length])
+    }, [isLoading, posts])
   );
 
   const loadPosts = async (nextOffset: number, reset: boolean) => {
@@ -339,77 +701,101 @@ export default function FeedScreen() {
 
     setIsLoading(true);
     setFeedMessage(null);
+    try {
+      const rangeFrom = nextOffset;
+      const rangeTo = nextOffset + PAGE_SIZE - 1;
 
-    const rangeFrom = nextOffset;
-    const rangeTo = nextOffset + PAGE_SIZE - 1;
+      const { data: rawPosts, error: postsError } = await supabase
+        .from("video_posts")
+        .select(
+          "id, creator_id, caption, created_at, video_url, clothing_tags(id, name, brand, category, url)"
+        )
+        .eq("status", "published")
+        .order("created_at", { ascending: false })
+        .range(rangeFrom, rangeTo);
 
-    const { data: rawPosts, error: postsError } = await supabase
-      .from("video_posts")
-      .select("id, creator_id, caption, created_at, video_url, clothing_tags(id, name, brand, category, url)")
-      .eq("status", "published")
-      .order("created_at", { ascending: false })
-      .range(rangeFrom, rangeTo);
-
-    if (postsError) {
-      setIsLoading(false);
-      setFeedMessage(`Failed to load feed: ${postsError.message}`);
-      return;
-    }
-
-    const creatorIds = Array.from(
-      new Set((rawPosts ?? []).map((post) => String(post.creator_id)))
-    );
-
-    let usernameMap = new Map<string, string>();
-    if (creatorIds.length > 0) {
-      const { data: profilesData } = await supabase
-        .from("profiles")
-        .select("id, username")
-        .in("id", creatorIds);
-
-      usernameMap = new Map(
-        (profilesData ?? []).map((profile) => [profile.id, profile.username])
-      );
-    }
-
-    const mappedPosts: FeedPost[] = (rawPosts ?? []).map((post) => ({
-      caption: post.caption ?? "",
-      created_at: post.created_at,
-      creator_id: String(post.creator_id),
-      creator_username:
-        usernameMap.get(String(post.creator_id)) ?? String(post.creator_id).slice(0, 8),
-      id: post.id,
-      tags: (post.clothing_tags ?? []) as FeedTag[],
-      video_url: post.video_url,
-    }));
-
-    setPosts((current) => {
-      if (reset) {
-        return mappedPosts;
+      if (postsError) {
+        setFeedMessage(`Failed to load feed: ${postsError.message}`);
+        return;
       }
-      const known = new Set(current.map((post) => post.id));
-      const deduped = mappedPosts.filter((post) => !known.has(post.id));
-      return [...current, ...deduped];
-    });
 
-    setOffset(nextOffset + mappedPosts.length);
-    setHasMore(mappedPosts.length === PAGE_SIZE);
-    setIsLoading(false);
+      const creatorIds = Array.from(
+        new Set((rawPosts ?? []).map((post) => String(post.creator_id)))
+      );
 
-    const knownIds = posts.map((post) => post.id);
-    const mergedIds = Array.from(
-      new Set(
-        reset
-          ? mappedPosts.map((post) => post.id)
-          : [...knownIds, ...mappedPosts.map((post) => post.id)]
-      )
-    );
-    await refreshGradeStats(mergedIds);
+      let usernameMap = new Map<string, string>();
+      if (creatorIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from("profiles")
+          .select("id, username")
+          .in("id", creatorIds);
+
+        usernameMap = new Map(
+          (profilesData ?? []).map((profile) => [profile.id, profile.username])
+        );
+      }
+
+      const mappedPosts: FeedPost[] = (rawPosts ?? []).map((post) => ({
+        caption: post.caption ?? "",
+        created_at: post.created_at,
+        creator_id: String(post.creator_id),
+        creator_username:
+          usernameMap.get(String(post.creator_id)) ?? String(post.creator_id).slice(0, 8),
+        id: post.id,
+        tags: (post.clothing_tags ?? []) as FeedTag[],
+        video_url: post.video_url,
+      }));
+
+      setPosts((current) => {
+        if (reset) {
+          return mappedPosts;
+        }
+        const known = new Set(current.map((post) => post.id));
+        const deduped = mappedPosts.filter((post) => !known.has(post.id));
+        return [...current, ...deduped];
+      });
+
+      setOffset(nextOffset + mappedPosts.length);
+      setHasMore(mappedPosts.length === PAGE_SIZE);
+
+      const knownIds = posts.map((post) => post.id);
+      const mergedIds = Array.from(
+        new Set(
+          reset
+            ? mappedPosts.map((post) => post.id)
+            : [...knownIds, ...mappedPosts.map((post) => post.id)]
+        )
+      );
+      await refreshGradeStats(mergedIds);
+      await refreshCommentCounts(mergedIds);
+    } catch (error) {
+      setFeedMessage(getRequestFailureMessage(error, "Failed to load feed"));
+      if (__DEV__) {
+        console.error("Failed to load feed", error);
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
     void loadPosts(0, true);
   }, []);
+
+  useEffect(() => {
+    if (!isFeedFocused || !activePost?.id || !user?.id) {
+      return;
+    }
+
+    void logPostImpressionBestEffort({
+      postId: activePost.id,
+      userId: user.id,
+    }).then((result) => {
+      if (__DEV__ && result.error) {
+        console.error("Failed to log post impression", result.error);
+      }
+    });
+  }, [activePost?.id, isFeedFocused, user?.id]);
 
   const insertGradeDirect = async (postId: string, value: number) => {
     return supabase.from("grades").insert({
@@ -585,6 +971,17 @@ export default function FeedScreen() {
   const openRevealSheet = () => {
     setSheetMessage(null);
     setSheetVisible(true);
+
+    if (user?.id && activePost?.id) {
+      void logTagRevealBestEffort({
+        postId: activePost.id,
+        userId: user.id,
+      }).then((result) => {
+        if (__DEV__ && result.error) {
+          console.error("Failed to log tag reveal", result.error);
+        }
+      });
+    }
   };
 
   const openGradeSheet = (postId: string) => {
@@ -598,6 +995,85 @@ export default function FeedScreen() {
       [postId]: null,
     }));
     setGradeSheetVisible(true);
+  };
+
+  const openCommentsSheet = (postId: string) => {
+    setCommentsSheetPostId(postId);
+    setCommentsSheetVisible(true);
+    setCommentsForSheet([]);
+    setCommentsComposerText("");
+    setCommentsComposerMessage(null);
+    void loadCommentsForPost(postId, "initial");
+  };
+
+  const closeCommentsSheet = () => {
+    Keyboard.dismiss();
+    setCommentsSheetVisible(false);
+    setCommentsComposerMessage(null);
+  };
+
+  const handleSubmitComment = async () => {
+    if (!commentsSheetPost || !user?.id) {
+      setCommentsComposerMessage("Sign in required.");
+      return;
+    }
+
+    const normalizedComment = commentsComposerText.trim().slice(0, COMMENT_MAX_LENGTH);
+    if (!normalizedComment) {
+      setCommentsComposerMessage("Write a comment first.");
+      return;
+    }
+
+    const now = Date.now();
+    const cooldownUntil = commentCooldownUntilRef.current[commentsSheetPost.id] ?? 0;
+    if (now < cooldownUntil) {
+      setCommentsComposerMessage("Please wait before posting again.");
+      return;
+    }
+
+    commentCooldownUntilRef.current[commentsSheetPost.id] = now + 2000;
+    setCommentsSubmitting(true);
+    setCommentsComposerMessage(null);
+
+    const optimisticId = `optimistic-${now}`;
+    const optimisticComment: SocialComment = {
+      created_at: new Date(now).toISOString(),
+      id: optimisticId,
+      post_id: commentsSheetPost.id,
+      text: normalizedComment,
+      user: {
+        avatar_url: profile?.avatar_url ?? null,
+        id: user.id,
+        username:
+          profile?.username ??
+          user.email?.split("@")[0] ??
+          user.id.replace(/-/g, "").slice(0, 8),
+      },
+      user_id: user.id,
+    };
+
+    setCommentsForSheet((current) =>
+      sortCommentsOldestFirst([...current, optimisticComment])
+    );
+    setCommentsComposerText("");
+
+    const result = await addCommentToPost(commentsSheetPost.id, user.id, normalizedComment);
+    if (result.error) {
+      setCommentsForSheet((current) =>
+        current.filter((comment) => comment.id !== optimisticId)
+      );
+      setCommentsComposerText(normalizedComment);
+      setCommentsComposerMessage(result.error);
+      if (__DEV__) {
+        console.error("Failed to submit comment", result.error);
+      }
+      setCommentsSubmitting(false);
+      return;
+    }
+
+    await loadCommentsForPost(commentsSheetPost.id, "silent");
+    setCommentsSubmitting(false);
+    setCommentsComposerMessage("Comment posted.");
   };
 
   const handleGradeComplete = async (nextValue: number) => {
@@ -747,16 +1223,23 @@ export default function FeedScreen() {
           <FeedVideoCard
             post={item}
             height={cardHeight}
-            active={index === activeIndex && isFeedFocused}
+            active={index === activeIndex && isFeedFocused && !commentsSheetVisible}
             shouldMountVideo={Math.abs(index - activeIndex) <= 1}
             captionExpanded={expandedCaptionPostId === item.id}
+            commentCount={commentCountsByPost[item.id] ?? 0}
             onToggleCaption={() => {
               setExpandedCaptionPostId((current) =>
                 current === item.id ? null : item.id
               );
             }}
+            onOpenComments={() => {
+              openCommentsSheet(item.id);
+            }}
             onOpenGradeSheet={() => {
               openGradeSheet(item.id);
+            }}
+            onOpenProfile={() => {
+              router.push(`/(app)/profile/${item.creator_id}`);
             }}
             onReportPost={() => {
               openReportComposer({
@@ -777,6 +1260,7 @@ export default function FeedScreen() {
             onRevealItems={openRevealSheet}
             topInset={insets.top}
             avgGradeText={stats?.avg != null ? stats.avg.toFixed(1) : "—"}
+            gradeCount={stats?.count ?? 0}
             userGrade={stats?.userGrade ?? null}
           />
           );
@@ -804,6 +1288,28 @@ export default function FeedScreen() {
         removeClippedSubviews
         ListFooterComponent={listFooter}
         scrollEnabled={posts.length > 0}
+      />
+
+      <CommentsSheet
+        comments={commentsForSheet}
+        composerMessage={commentsComposerMessage}
+        composerText={commentsComposerText}
+        isLoading={commentsLoading}
+        isRefreshing={commentsRefreshing}
+        isSubmitting={commentsSubmitting}
+        onChangeComposerText={setCommentsComposerText}
+        onClose={closeCommentsSheet}
+        onRefresh={() => {
+          if (!commentsSheetPostId) {
+            return;
+          }
+          void loadCommentsForPost(commentsSheetPostId, "refresh");
+        }}
+        onSubmit={() => {
+          void handleSubmitComment();
+        }}
+        post={commentsSheetPost}
+        visible={commentsSheetVisible}
       />
 
       <ReportComposer
@@ -964,26 +1470,237 @@ export default function FeedScreen() {
 
 const styles = StyleSheet.create({
   bottomOverlay: {
-    bottom: 24,
-    left: 16,
+    bottom: 94,
+    left: 8,
     position: "absolute",
-    right: 16,
+    right: 82,
     zIndex: 4,
+  },
+  commentBody: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  commentMetaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  commentRow: {
+    backgroundColor: "rgba(255,249,243,0.84)",
+    borderColor: "rgba(216,206,194,0.88)",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    marginBottom: 10,
+    padding: 12,
+  },
+  commentText: {
+    color: theme.color.ink,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 6,
+  },
+  commentTime: {
+    color: theme.color.inkSoft,
+    fontSize: 12,
+  },
+  commentUsername: {
+    color: theme.color.ink,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  commentsBackdrop: {
+    backgroundColor: "rgba(17,12,10,0.26)",
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  commentsCharacterCount: {
+    color: theme.color.inkSoft,
+    fontSize: 12,
+  },
+  commentsCloseButton: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  commentsCloseText: {
+    color: theme.color.accentBright,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  commentsComposer: {
+    backgroundColor: "rgba(255,249,243,0.98)",
+    borderTopColor: "rgba(216,206,194,0.72)",
+    borderTopWidth: 1,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  commentsComposerFooter: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  commentsComposerMessage: {
+    color: theme.color.accentBright,
+    fontSize: 12,
+    marginTop: 10,
+  },
+  commentsEmptyText: {
+    color: theme.color.inkSoft,
+    lineHeight: 20,
+    marginTop: 8,
+    textAlign: "center",
+  },
+  commentsEmptyTitle: {
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 22,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  commentsEmptyWrap: {
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 40,
+  },
+  commentsHandle: {
+    alignSelf: "center",
+    backgroundColor: "rgba(140,120,110,0.28)",
+    borderRadius: 999,
+    height: 5,
+    marginBottom: 14,
+    width: 54,
+  },
+  commentsHeaderRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+  },
+  commentsInput: {
+    color: theme.color.ink,
+    fontSize: 15,
+    lineHeight: 21,
+    maxHeight: 86,
+    minHeight: 40,
+  },
+  commentsListContent: {
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingTop: 2,
+  },
+  commentsModalRoot: {
+    flex: 1,
+  },
+  commentsPanel: {
+    backgroundColor: theme.color.shell,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: "72%",
+    minHeight: "58%",
+    overflow: "hidden",
+    shadowColor: "#6f5b4b",
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+  },
+  commentsPreviewCaption: {
+    color: theme.color.white,
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 4,
+  },
+  commentsPreviewCard: {
+    borderColor: "rgba(255,255,255,0.28)",
+    borderRadius: 22,
+    borderWidth: 1,
+    height: 164,
+    overflow: "hidden",
+    width: 124,
+  },
+  commentsPreviewMeta: {
+    bottom: 10,
+    left: 10,
+    position: "absolute",
+    right: 10,
+  },
+  commentsPreviewTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(16,12,10,0.14)",
+  },
+  commentsPreviewUsername: {
+    color: theme.color.white,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  commentsPreviewVideo: {
+    height: "100%",
+    width: "100%",
+  },
+  commentsPreviewWrap: {
+    alignItems: "center",
+    marginBottom: -18,
+    zIndex: 2,
+  },
+  commentsSendButton: {
+    alignItems: "center",
+    backgroundColor: theme.color.accentBright,
+    borderRadius: theme.radius.pill,
+    justifyContent: "center",
+    minWidth: 86,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  commentsSendButtonDisabled: {
+    opacity: 0.6,
+  },
+  commentsSendText: {
+    color: theme.color.white,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  commentsStateText: {
+    color: theme.color.inkSoft,
+    marginTop: 10,
+    textAlign: "center",
+  },
+  commentsStateWrap: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 220,
+  },
+  commentsTitle: {
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 26,
+    fontWeight: "700",
   },
   bottomUsername: {
     color: theme.color.white,
-    fontSize: 15,
-    fontWeight: "800",
-    marginBottom: 6,
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 2,
   },
   caption: {
-    color: theme.color.white,
-    fontSize: 14,
-    lineHeight: 19,
-    maxWidth: "78%",
+    color: "rgba(255,255,255,0.96)",
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  captionCard: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(192, 170, 144, 0.54)",
+    borderColor: "rgba(255,255,255,0.18)",
+    borderRadius: 13,
+    borderWidth: 1,
+    maxWidth: 194,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   cardWrap: {
-    backgroundColor: "#0d0806",
+    backgroundColor: "#d7c7b4",
     overflow: "hidden",
     width: "100%",
   },
@@ -993,10 +1710,78 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   expandCopy: {
-    color: "rgba(255,255,255,0.82)",
-    fontSize: 11,
+    color: "rgba(255,255,255,0.86)",
+    fontSize: 9,
     fontWeight: "700",
-    marginTop: 4,
+    marginTop: 3,
+  },
+  creatorAvatar: {
+    alignItems: "center",
+    backgroundColor: "#cfb896",
+    borderColor: "rgba(255,255,255,0.88)",
+    borderRadius: 999,
+    borderWidth: 2,
+    height: 48,
+    justifyContent: "center",
+    width: 48,
+  },
+  creatorAvatarText: {
+    color: theme.color.white,
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  creatorButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,109,104,0.92)",
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  creatorButtonText: {
+    color: theme.color.white,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  creatorCard: {
+    alignItems: "center",
+    backgroundColor: "rgba(214, 190, 164, 0.66)",
+    borderColor: "rgba(255,255,255,0.24)",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    shadowColor: "#6f5b4b",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    width: 208,
+  },
+  creatorCardWrap: {
+    alignItems: "center",
+    left: 8,
+    position: "absolute",
+    right: 8,
+    zIndex: 4,
+  },
+  creatorMeta: {
+    alignItems: "flex-start",
+    flexShrink: 1,
+  },
+  creatorMainTap: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: 10,
+  },
+  creatorName: {
+    color: theme.color.white,
+    fontSize: 14,
+    fontWeight: "500",
+    letterSpacing: 0.3,
+    marginBottom: 3,
   },
   feedMessage: {
     backgroundColor: "rgba(255,249,243,0.92)",
@@ -1079,45 +1864,46 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   placeholderText: {
-    color: theme.color.white,
+    color: theme.color.shell,
     fontSize: 16,
   },
-  reportText: {
-    color: "rgba(255,255,255,0.82)",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  reportTextWrap: {
-    alignSelf: "flex-start",
-    marginTop: 10,
-  },
-  scoreOrb: {
+  scoreCard: {
     alignItems: "center",
-    backgroundColor: "rgba(255, 249, 243, 0.88)",
-    borderColor: "rgba(255,255,255,0.22)",
-    borderRadius: 999,
+    backgroundColor: "rgba(203, 180, 154, 0.58)",
+    borderColor: "rgba(255,255,255,0.20)",
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 8,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 8,
     borderWidth: 1,
-    minHeight: 82,
-    minWidth: 82,
-    paddingHorizontal: 14,
-    paddingVertical: 16,
+    minHeight: 104,
+    minWidth: 68,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
   },
-  scoreOrbLabel: {
-    color: theme.color.inkSoft,
-    fontSize: 11,
+  scoreCardHint: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 8,
     fontWeight: "700",
     marginTop: 4,
     textAlign: "center",
   },
-  scoreOrbValue: {
-    color: theme.color.accentBright,
+  scoreCardSub: {
+    color: "rgba(255,255,255,0.84)",
+    fontSize: 14,
+    fontWeight: "400",
+    lineHeight: 16,
+    marginTop: 1,
+  },
+  scoreCardValue: {
+    color: theme.color.white,
     fontFamily: "serif",
-    fontSize: 30,
-    fontWeight: "700",
-    lineHeight: 30,
+    fontSize: 38,
+    fontWeight: "500",
+    lineHeight: 40,
   },
   screen: {
-    backgroundColor: theme.color.shell,
+    backgroundColor: "#d8c8b8",
     flex: 1,
   },
   sheetBackdrop: {
@@ -1158,10 +1944,62 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   sideRail: {
+    alignItems: "center",
+    gap: 8,
     position: "absolute",
-    right: 14,
-    top: "44%",
+    right: -8,
+    top: "33%",
     zIndex: 4,
+  },
+  sideIconButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(203, 180, 154, 0.54)",
+    borderColor: "rgba(255,255,255,0.20)",
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 8,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 58,
+    minWidth: 58,
+    paddingHorizontal: 6,
+  },
+  sideIconButtonText: {
+    color: theme.color.white,
+    fontSize: 10,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  sideIconButtonSubText: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 12,
+    marginTop: 2,
+    textAlign: "center",
+  },
+  sidePill: {
+    backgroundColor: "rgba(203, 180, 154, 0.54)",
+    borderColor: "rgba(255,255,255,0.20)",
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 8,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 8,
+    borderWidth: 1,
+    minWidth: 74,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+  },
+  sidePillLabel: {
+    color: theme.color.white,
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  sidePillSubLabel: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 8,
+    marginTop: 2,
+    textAlign: "center",
   },
   tagChipEmpty: {
     color: theme.color.inkSoft,
@@ -1227,69 +2065,6 @@ const styles = StyleSheet.create({
   tagRowDisabled: {
     opacity: 0.55,
   },
-  topActionButton: {
-    backgroundColor: "rgba(234,47,35,0.14)",
-    borderRadius: theme.radius.pill,
-    marginLeft: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-  topActionText: {
-    color: theme.color.accentBright,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  topActionButtonMuted: {
-    backgroundColor: "rgba(255,249,243,0.18)",
-    borderColor: "rgba(255,255,255,0.18)",
-    borderRadius: theme.radius.pill,
-    borderWidth: 1,
-    marginLeft: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  topActionTextMuted: {
-    color: theme.color.white,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  topStrip: {
-    alignItems: "center",
-    backgroundColor: "rgba(255,249,243,0.54)",
-    borderColor: "rgba(255,255,255,0.24)",
-    borderRadius: 22,
-    borderWidth: 1,
-    flexDirection: "row",
-    left: 12,
-    minHeight: 62,
-    paddingHorizontal: 12,
-    position: "absolute",
-    right: 12,
-    zIndex: 4,
-  },
-  topStripActions: {
-    alignItems: "center",
-    flexDirection: "row",
-    marginLeft: 12,
-  },
-  topStripTags: {
-    flex: 1,
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  topTagChip: {
-    backgroundColor: "rgba(234,47,35,0.10)",
-    borderRadius: theme.radius.pill,
-    marginRight: 8,
-    marginTop: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  topUsername: {
-    color: theme.color.ink,
-    fontSize: 15,
-    fontWeight: "800",
-  },
   video: {
     height: "100%",
     width: "100%",
@@ -1299,7 +2074,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   videoTint: {
-    backgroundColor: "rgba(27, 19, 13, 0.12)",
+    backgroundColor: "rgba(228, 211, 191, 0.05)",
     bottom: 0,
     left: 0,
     position: "absolute",

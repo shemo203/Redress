@@ -1,7 +1,6 @@
 import { Link, router } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import * as Linking from "expo-linking";
 
 import { PRIVACY_URL, TERMS_URL, theme } from "../../src/constants";
 import { supabase } from "../../src/lib/supabaseClient";
@@ -88,18 +87,15 @@ export default function SignUpScreen() {
 
       <View style={styles.linkRow}>
         <Text>Terms: </Text>
-        <Text onPress={() => void Linking.openURL(TERMS_URL)} style={styles.linkText}>
-          {TERMS_URL}
-        </Text>
+        <Link href={TERMS_URL} style={styles.linkText}>
+          Terms of Use
+        </Link>
       </View>
       <View style={styles.linkRow}>
         <Text>Privacy: </Text>
-        <Text
-          onPress={() => void Linking.openURL(PRIVACY_URL)}
-          style={styles.linkText}
-        >
-          {PRIVACY_URL}
-        </Text>
+        <Link href={PRIVACY_URL} style={styles.linkText}>
+          Privacy Notice
+        </Link>
       </View>
 
       <Pressable

@@ -17,6 +17,7 @@
    - `EXPO_PUBLIC_GOOGLE_AUTH_ENABLED=false` (set `true` to show Google sign-in button)
    - `EXPO_PUBLIC_GOOGLE_AUTH_REDIRECT_URL=redress://`
    - `EXPO_PUBLIC_DEV_SEED=false` (set `true` to show the dev-only seed instructions screen in Account)
+   - `EXPO_PUBLIC_ADMIN_USER_IDS=` comma-separated auth user ids allowed to open the moderation screen
 5. Start the Expo dev server:
    `npm run start`
 
@@ -42,6 +43,28 @@ If you are using Supabase SQL Editor instead of CLI:
 1. In Supabase Dashboard: `Authentication` -> `Providers` -> `Email`.
 2. Enable Email provider.
 3. Choose whether email confirmation is required.
+
+### Terms and Privacy pages
+The onboarding Terms/Privacy links are in-app routes, not external placeholder URLs.
+
+Files:
+- Terms: `app/(public)/terms.tsx`
+- Privacy: `app/(public)/privacy.tsx`
+- Shared page UI: `src/features/legal/LegalDocumentScreen.tsx`
+- Link constants: `src/constants/auth.ts`
+
+Expected routes:
+- `/terms`
+- `/privacy`
+
+Quick check:
+1. Start the app.
+2. Open `Create account`.
+3. Tap `Terms of Use` and confirm the in-app Terms page opens.
+4. Go back, tap `Privacy Notice`, and confirm the in-app Privacy page opens.
+5. Confirm both pages are reachable while signed out.
+6. On the Privacy page, confirm the IMY GDPR complaint link and rights link are visible and open correctly.
+7. Before public launch, update the Privacy page with final controller/contact details and review the copy for GDPR/legal completeness.
 
 ### Google (optional for Q3)
 1. In Supabase Dashboard: `Authentication` -> `Providers` -> `Google`, then enable Google.
@@ -106,13 +129,76 @@ If you want a reminder screen inside the app, set:
 
 Then open `Account` and use the dev-only `Seed database instructions` link.
 
+## Social Verification (Phase 1 + Phase 2)
+Use this after applying the social migration and running the app in development.
+
+### Apply migration
+1. Ensure the social migration exists:
+   - `supabase/migrations/20260420000100_social_follows_comments.sql`
+2. Apply migrations:
+   - `supabase db push`
+
+### Quick checks in the app
+1. Sign in with a real dev account.
+2. Open `Account`.
+3. In development, use the `Dev: social debug` section.
+4. Enter a target username or profile id and tap `Load profile`.
+5. Tap `Follow`.
+6. Confirm counts update in the debug panel.
+7. Enter a published post id in the comments area.
+8. Tap `Load comments`.
+9. Add a test comment and confirm it appears after reload.
+
+### Quick checks in Supabase
+In `Table Editor` or `SQL Editor`, verify:
+- `follows` contains the new follow row
+- `comments` contains the new comment row
+
+Useful SQL:
+```sql
+select * from public.follows order by created_at desc limit 20;
+select * from public.comments order by created_at desc limit 20;
+select * from public.get_follow_counts('<profile-uuid>'::uuid);
+```
+
+### RLS sanity checks
+- App-side follow insert should fail if you try to follow as another user id.
+- App-side comment insert should fail if `user_id` does not match `auth.uid()`.
+- Comment reads should only work for published post ids.
+- Follow counts should still work through `get_follow_counts(...)`.
+
 ## Boot Check
 - Signed-out users should be redirected to sign-in.
+- Signed-out users must not be able to fetch feed data through Supabase; published posts, tags, grades, and comments are authenticated-read only.
 - Sign-up should require both checkboxes: `I'm 13+` and `Terms & Privacy`.
 - After login, the app should route to authenticated screens.
-- Account screen should show user id, email, username, and support sign-out.
+- Closing and reopening the app should keep the current session when the Supabase auth token is still valid.
+- Account screen should show user id, email, username, a `session loaded: yes/no` debug value, and support sign-out.
 - Sign-out should return to auth screens.
 - Upload screen should allow selecting a video, uploading to Storage, creating a `video_posts` draft row, and playing preview from stored URL.
+
+### Session persistence check
+1. Sign in with email/password.
+2. Open `Account`.
+3. Confirm `Session loaded` shows `yes`.
+4. Fully close the app.
+5. Reopen the app.
+6. Confirm you are still signed in and routed back into the authenticated app.
+7. Open `Account` again and confirm `Session loaded` still shows `yes`.
+
+### No-anonymous-browsing check
+1. Sign out fully.
+2. Confirm the app routes to `/(auth)` instead of the feed.
+3. Apply the latest migrations, including `supabase/migrations/20260423000100_rls_require_auth_for_feed_reads.sql`.
+4. In Supabase SQL Editor, verify the feed tables no longer grant `anon` read access:
+```sql
+select policyname, roles, cmd
+from pg_policies
+where schemaname = 'public'
+  and tablename in ('video_posts', 'clothing_tags', 'grades', 'comments')
+order by tablename, policyname;
+```
+5. Confirm the published-read policies list only `authenticated`, not `anon`.
 
 ## Notes
 - Only `EXPO_PUBLIC_*` variables are exposed to the client bundle.

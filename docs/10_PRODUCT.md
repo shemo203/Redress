@@ -37,6 +37,17 @@ Ship the MVP for an Expo client backed by Supabase.
 - Average grade is displayed per post and rounded to one decimal place.
 - Grade submission has short client cooldown to reduce rapid repeat taps.
 
+## Comments MVP Rules
+- Comments are available only on published posts.
+- Authenticated users can add comments.
+- Comment text is trimmed and limited to `500` characters.
+- Empty comments are blocked.
+- The MVP supports plain text comments only:
+  - no likes
+  - no replies
+  - no editing
+- Comment submission has a short client cooldown to reduce rapid repeat taps.
+
 ## Out Of Scope
 - Extra roles beyond what MVP needs.
 - Ranking, recommendation, or moderation features beyond reporting.

@@ -11,6 +11,7 @@ import {
 import { supabase } from "../../lib/supabaseClient";
 
 type Profile = {
+  avatar_url: string | null;
   id: string;
   username: string;
 };
@@ -19,6 +20,7 @@ type AuthContextValue = {
   isLoading: boolean;
   profile: Profile | null;
   session: Session | null;
+  sessionLoaded: boolean;
   user: User | null;
   refreshProfile: () => Promise<void>;
 };
@@ -45,7 +47,7 @@ async function upsertProfileForUser(user: User): Promise<Profile> {
       },
       { onConflict: "id" }
     )
-    .select("id, username")
+    .select("id, username, avatar_url")
     .single();
 
   if (error) {
@@ -59,6 +61,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
   const lastUpsertedUserId = useRef<string | null>(null);
 
   const refreshProfile = async () => {
@@ -69,7 +72,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, username")
+      .select("id, username, avatar_url")
       .eq("id", session.user.id)
       .maybeSingle();
 
@@ -84,18 +87,29 @@ export function AuthProvider({ children }: PropsWithChildren) {
     let isMounted = true;
 
     const initialize = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!isMounted) {
-        return;
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!isMounted) {
+          return;
+        }
+        setSession(data.session ?? null);
+        setSessionLoaded(Boolean(data.session));
+      } catch (error) {
+        if (__DEV__) {
+          console.error("Failed to read auth session", error);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
-      setSession(data.session ?? null);
-      setIsLoading(false);
     };
 
     void initialize();
 
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession ?? null);
+      setSessionLoaded(Boolean(nextSession));
       setIsLoading(false);
       if (!nextSession) {
         lastUpsertedUserId.current = null;
@@ -149,6 +163,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         profile,
         refreshProfile,
         session,
+        sessionLoaded,
         user: session?.user ?? null,
       }}
     >

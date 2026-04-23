@@ -1,21 +1,45 @@
 import { supabase } from "../../lib/supabaseClient";
-
-export const REPORT_REASONS = [
-  "offensive content",
-  "sexual/explicit content",
-  "harassment",
-  "spam",
-  "broken/malicious link",
-] as const;
-
-export type ReportReason = (typeof REPORT_REASONS)[number];
-export type ReportTargetType = "post" | "profile" | "link";
+export {
+  REPORT_BLOCKLIST_DOMAIN_STUB,
+  REPORT_DETAILS_MAX_LENGTH,
+  REPORT_REASONS,
+  REPORT_REVIEW_STATUSES,
+  type ReportReason,
+  type ReportReviewStatus,
+  type ReportTargetType,
+} from "./constants";
+import {
+  REPORT_BLOCKLIST_DOMAIN_STUB,
+  REPORT_DETAILS_MAX_LENGTH,
+  REPORT_REASONS,
+  REPORT_REVIEW_STATUSES,
+  type ReportReason,
+  type ReportReviewStatus,
+  type ReportTargetType,
+} from "./constants";
 
 export type ReportRecord = {
   created_at: string;
   details: string | null;
   id: string;
   reason: string;
+  review_status?: ReportReviewStatus;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  target_id: string;
+  target_type: ReportTargetType;
+};
+
+export type ModerationReportRecord = {
+  created_at: string;
+  details: string | null;
+  id: string;
+  reason: ReportReason;
+  reporter_id: string;
+  reporter_username: string | null;
+  review_status: ReportReviewStatus;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
   target_id: string;
   target_type: ReportTargetType;
 };
@@ -27,9 +51,6 @@ type SubmitReportInput = {
   targetId: string;
   targetType: ReportTargetType;
 };
-
-export const REPORT_BLOCKLIST_DOMAIN_STUB: string[] = [];
-export const REPORT_DETAILS_MAX_LENGTH = 500;
 
 export function normalizeReportDetails(details: string) {
   return details.trim().slice(0, REPORT_DETAILS_MAX_LENGTH);
@@ -47,6 +68,12 @@ export function buildLinkReportDetails(url: string, details: string) {
 
 export function isValidReportReason(reason: string): reason is ReportReason {
   return REPORT_REASONS.includes(reason as ReportReason);
+}
+
+export function isValidReportReviewStatus(
+  reviewStatus: string
+): reviewStatus is ReportReviewStatus {
+  return REPORT_REVIEW_STATUSES.includes(reviewStatus as ReportReviewStatus);
 }
 
 export async function submitReport({
@@ -91,13 +118,62 @@ export async function submitReport({
 export async function fetchMyReports(userId: string) {
   const { data, error } = await supabase
     .from("reports")
-    .select("id, target_type, target_id, reason, details, created_at")
+    .select(
+      "id, target_type, target_id, reason, details, created_at, review_status, reviewed_at, reviewed_by"
+    )
     .eq("reporter_id", userId)
     .order("created_at", { ascending: false })
     .limit(20);
 
   return {
     data: (data ?? []) as ReportRecord[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function fetchReportsForReview({
+  reason,
+  targetType,
+}: {
+  reason?: ReportReason | null;
+  targetType?: ReportTargetType | null;
+}) {
+  const { data, error } = await supabase.rpc("list_reports_for_review", {
+    filter_reason: reason ?? null,
+    filter_target_type: targetType ?? null,
+  });
+
+  return {
+    data: (data ?? []) as ModerationReportRecord[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function updateReportReviewStatus(
+  reportId: string,
+  reviewStatus: Extract<ReportReviewStatus, "reviewed" | "resolved">
+) {
+  if (!reportId.trim()) {
+    return {
+      data: null,
+      error: "Missing report id.",
+    };
+  }
+
+  if (!isValidReportReviewStatus(reviewStatus)) {
+    return {
+      data: null,
+      error: "Invalid review status.",
+    };
+  }
+
+  const { data, error } = await supabase.rpc("set_report_review_status", {
+    next_review_status: reviewStatus,
+    target_report_id: reportId,
+  });
+
+  return {
+    data: (data ?? null) as ReportRecord | null,
     error: error?.message ?? null,
   };
 }

@@ -13,7 +13,7 @@ import {
   REPORT_DETAILS_MAX_LENGTH,
   REPORT_REASONS,
   type ReportReason,
-} from "./index";
+} from "./constants";
 
 type ReportComposerProps = {
   initialDetails?: string;

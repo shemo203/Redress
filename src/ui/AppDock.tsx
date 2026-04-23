@@ -1,8 +1,9 @@
 import { usePathname, useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { theme } from "../constants";
+import { useAuth } from "../features/auth";
 import { BrandMark } from "./BrandMark";
 
 function ProfileGlyph({ active = false }: { active?: boolean }) {
@@ -28,27 +29,28 @@ export function AppDock() {
   const pathname = usePathname();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { profile } = useAuth();
 
   const isUpload = pathname.startsWith("/(app)/upload");
   const isAccount = pathname.startsWith("/(app)/account");
+  const avatarUri = profile?.avatar_url?.trim() || null;
 
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.dockWrap, { paddingBottom: Math.max(insets.bottom, 3) }]}
+      style={[styles.dockWrap, { paddingBottom: Math.max(insets.bottom - 10, 0) }]}
     >
-      <View style={styles.bar}>
+      <View style={styles.row}>
         <Pressable
           accessibilityRole="button"
           onPress={() => router.replace("/(app)/upload")}
-          style={styles.sideItem}
+          style={[
+            styles.sideCircle,
+            styles.leftSideCircle,
+            isUpload ? styles.sideCircleActive : undefined,
+          ]}
         >
-          <View style={[styles.iconCircle, isUpload ? styles.iconCircleActive : undefined]}>
-            <Text style={[styles.plus, isUpload ? styles.plusActive : undefined]}>+</Text>
-          </View>
-          <Text style={[styles.sideLabel, isUpload ? styles.activeLabel : undefined]}>
-            New Post
-          </Text>
+          <Text style={[styles.plus, isUpload ? styles.plusActive : undefined]}>+</Text>
         </Pressable>
 
         <Pressable
@@ -56,20 +58,23 @@ export function AppDock() {
           onPress={() => router.replace("/(app)")}
           style={styles.centerItem}
         >
-          <BrandMark elevated size={54} variant="chrome" />
+          <BrandMark elevated showWordmark size={114} variant="chrome" />
         </Pressable>
 
         <Pressable
           accessibilityRole="button"
           onPress={() => router.replace("/(app)/account")}
-          style={styles.sideItem}
+          style={[
+            styles.sideCircle,
+            styles.rightSideCircle,
+            isAccount ? styles.sideCircleActive : undefined,
+          ]}
         >
-          <View style={[styles.iconCircle, isAccount ? styles.iconCircleActive : undefined]}>
+          {avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={styles.avatar} />
+          ) : (
             <ProfileGlyph active={isAccount} />
-          </View>
-          <Text style={[styles.sideLabel, isAccount ? styles.activeLabel : undefined]}>
-            Profile
-          </Text>
+          )}
         </Pressable>
       </View>
     </View>
@@ -77,44 +82,77 @@ export function AppDock() {
 }
 
 const styles = StyleSheet.create({
-  activeLabel: {
-    color: theme.color.ink,
-  },
-  bar: {
-    alignItems: "flex-end",
-    backgroundColor: "#f1ede7",
-    borderTopColor: "rgba(117,110,103,0.14)",
-    borderTopWidth: 1,
-    flexDirection: "row",
-    height: 54,
-    justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingBottom: 1,
-    paddingTop: 2,
+  avatar: {
+    borderRadius: 999,
+    height: "100%",
+    width: "100%",
   },
   centerItem: {
     alignItems: "center",
-    marginTop: -16,
-    minWidth: 62,
+    justifyContent: "center",
+    minWidth: 124,
+    transform: [{ translateY: 58 }],
   },
   dockWrap: {
-    backgroundColor: "#f1ede7",
     bottom: 0,
     left: 0,
     position: "absolute",
     right: 0,
   },
-  iconCircle: {
+  plus: {
+    color: theme.color.inkSoft,
+    fontSize: 34,
+    fontWeight: "300",
+    marginTop: -4,
+  },
+  plusActive: {
+    color: theme.color.accentBright,
+  },
+  leftSideCircle: {
+    transform: [{ translateX: -10 }, { translateY: 34 }],
+  },
+  profileBody: {
+    borderRadius: 999,
+    borderWidth: 2.2,
+    borderTopWidth: 0,
+    height: 10,
+    marginTop: 3,
+    width: 15,
+  },
+  profileGlyph: {
     alignItems: "center",
-    backgroundColor: theme.color.shell,
-    borderColor: "rgba(140,120,110,0.18)",
+    justifyContent: "center",
+  },
+  profileHead: {
+    borderRadius: 999,
+    borderWidth: 2.2,
+    height: 9,
+    width: 9,
+  },
+  row: {
+    alignItems: "flex-end",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 0,
+  },
+  rightSideCircle: {
+    transform: [{ translateX: 10 }, { translateY: 34 }],
+  },
+  sideCircle: {
+    alignItems: "center",
+    backgroundColor: "rgba(239, 219, 185, 0.94)",
+    borderColor: "rgba(255,255,255,0.76)",
     borderRadius: 999,
     borderWidth: 1,
-    height: 34,
+    height: 64,
     justifyContent: "center",
-    width: 34,
+    shadowColor: "#6f5b4b",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    width: 64,
   },
-  iconCircleActive: {
+  sideCircleActive: {
     borderColor: theme.color.accentBright,
     borderWidth: 2,
   },
@@ -123,43 +161,5 @@ const styles = StyleSheet.create({
   },
   iconStrokeActive: {
     borderColor: theme.color.accentBright,
-  },
-  plus: {
-    color: theme.color.inkSoft,
-    fontSize: 21,
-    fontWeight: "300",
-    marginTop: -2,
-  },
-  plusActive: {
-    color: theme.color.accentBright,
-  },
-  profileBody: {
-    borderRadius: 999,
-    borderWidth: 2,
-    borderTopWidth: 0,
-    height: 10,
-    marginTop: 2,
-    width: 14,
-  },
-  profileGlyph: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 0,
-  },
-  profileHead: {
-    borderRadius: 999,
-    borderWidth: 2,
-    height: 8,
-    width: 8,
-  },
-  sideItem: {
-    alignItems: "center",
-    gap: 3,
-    minWidth: 64,
-  },
-  sideLabel: {
-    color: theme.color.inkSoft,
-    fontSize: 10,
-    fontWeight: "500",
   },
 });

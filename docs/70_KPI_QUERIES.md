@@ -38,6 +38,88 @@ group by days.day
 order by days.day;
 ```
 
+### D1 retention by signup day (last 14 signup cohorts)
+Uses `profiles.created_at` as cohort day and `app_opens` as return activity.
+
+```sql
+with signup_cohorts as (
+  select
+    p.id as user_id,
+    timezone('UTC', p.created_at)::date as signup_day
+  from public.profiles p
+  where p.created_at >= current_date - interval '13 days'
+),
+cohort_sizes as (
+  select
+    signup_day,
+    count(*)::numeric as cohort_size
+  from signup_cohorts
+  group by signup_day
+),
+d1_returns as (
+  select
+    sc.signup_day,
+    count(distinct sc.user_id)::numeric as retained_users
+  from signup_cohorts sc
+  join public.app_opens ao
+    on ao.user_id = sc.user_id
+   and timezone('UTC', ao.created_at)::date = sc.signup_day + 1
+  group by sc.signup_day
+)
+select
+  cs.signup_day,
+  cs.cohort_size::bigint as cohort_size,
+  coalesce(dr.retained_users, 0)::bigint as d1_retained_users,
+  case
+    when cs.cohort_size = 0 then 0
+    else round(100.0 * coalesce(dr.retained_users, 0) / cs.cohort_size, 2)
+  end as d1_retention_pct
+from cohort_sizes cs
+left join d1_returns dr
+  on dr.signup_day = cs.signup_day
+order by cs.signup_day;
+```
+
+### D3 retention by signup day (last 14 signup cohorts)
+```sql
+with signup_cohorts as (
+  select
+    p.id as user_id,
+    timezone('UTC', p.created_at)::date as signup_day
+  from public.profiles p
+  where p.created_at >= current_date - interval '13 days'
+),
+cohort_sizes as (
+  select
+    signup_day,
+    count(*)::numeric as cohort_size
+  from signup_cohorts
+  group by signup_day
+),
+d3_returns as (
+  select
+    sc.signup_day,
+    count(distinct sc.user_id)::numeric as retained_users
+  from signup_cohorts sc
+  join public.app_opens ao
+    on ao.user_id = sc.user_id
+   and timezone('UTC', ao.created_at)::date = sc.signup_day + 3
+  group by sc.signup_day
+)
+select
+  cs.signup_day,
+  cs.cohort_size::bigint as cohort_size,
+  coalesce(dr.retained_users, 0)::bigint as d3_retained_users,
+  case
+    when cs.cohort_size = 0 then 0
+    else round(100.0 * coalesce(dr.retained_users, 0) / cs.cohort_size, 2)
+  end as d3_retention_pct
+from cohort_sizes cs
+left join d3_returns dr
+  on dr.signup_day = cs.signup_day
+order by cs.signup_day;
+```
+
 ## Engagement / Content Supply
 
 ### Published videos per day (last 30 days)
@@ -203,23 +285,119 @@ limit 20;
 
 ## Commerce Intent
 
-### Reveal-tags tap-through rate
-Not instrumented yet.
+### Impression → reveal rate (overall)
+Uses distinct user/post pairs from `post_impressions` and `tag_reveals`.
 
-Current schema does not log when the Reveal Items sheet is opened, so we cannot compute a reveal-to-click rate.
+```sql
+with impressions as (
+  select
+    count(distinct user_id::text || ':' || post_id::text)::numeric as impression_units
+  from public.post_impressions
+),
+reveals as (
+  select
+    count(distinct user_id::text || ':' || post_id::text)::numeric as reveal_units
+  from public.tag_reveals
+)
+select
+  impressions.impression_units::bigint as impression_units,
+  reveals.reveal_units::bigint as reveal_units,
+  case
+    when impressions.impression_units = 0 then 0
+    else round(100.0 * reveals.reveal_units / impressions.impression_units, 2)
+  end as impression_to_reveal_rate_pct
+from impressions
+cross join reveals;
+```
 
-Minimal additional instrumentation needed:
-- add a `tag_reveals` event table with at least:
-  - `id uuid`
-  - `post_id uuid`
-  - `user_id uuid`
-  - `created_at timestamptz`
+### Reveal → click rate (overall)
+Measures distinct user/post click pairs divided by distinct user/post reveal pairs.
 
-Once instrumented, the KPI would be:
-- `distinct users who clicked outbound links / distinct users who opened Reveal Items`
+```sql
+with reveals as (
+  select
+    count(distinct user_id::text || ':' || post_id::text)::numeric as reveal_units
+  from public.tag_reveals
+),
+clicks as (
+  select
+    count(distinct user_id::text || ':' || post_id::text)::numeric as click_user_post_pairs
+  from public.outbound_clicks
+)
+select
+  reveals.reveal_units::bigint as reveal_units,
+  clicks.click_user_post_pairs::bigint as click_user_post_pairs,
+  case
+    when reveals.reveal_units = 0 then 0
+    else round(100.0 * clicks.click_user_post_pairs / reveals.reveal_units, 2)
+  end as reveal_to_click_rate_pct
+from reveals
+cross join clicks;
+```
+
+### True CTR (overall)
+Distinct user/post click pairs divided by distinct user/post impression pairs.
+
+```sql
+with impressions as (
+  select
+    count(distinct user_id::text || ':' || post_id::text)::numeric as impression_units
+  from public.post_impressions
+),
+clicks as (
+  select
+    count(distinct user_id::text || ':' || post_id::text)::numeric as click_user_post_pairs
+  from public.outbound_clicks
+)
+select
+  impressions.impression_units::bigint as impression_units,
+  clicks.click_user_post_pairs::bigint as click_user_post_pairs,
+  case
+    when impressions.impression_units = 0 then 0
+    else round(100.0 * clicks.click_user_post_pairs / impressions.impression_units, 2)
+  end as true_ctr_pct
+from impressions
+cross join clicks;
+```
+
+### True CTR per post
+```sql
+with impression_units as (
+  select
+    post_id,
+    count(distinct user_id)::numeric as viewers
+  from public.post_impressions
+  group by post_id
+),
+click_units as (
+  select
+    post_id,
+    count(distinct user_id)::numeric as clickers
+  from public.outbound_clicks
+  group by post_id
+)
+select
+  vp.id as post_id,
+  vp.creator_id,
+  vp.published_at,
+  coalesce(iu.viewers, 0)::bigint as viewers,
+  coalesce(cu.clickers, 0)::bigint as clickers,
+  case
+    when coalesce(iu.viewers, 0) = 0 then 0
+    else round(100.0 * coalesce(cu.clickers, 0) / iu.viewers, 2)
+  end as true_ctr_pct
+from public.video_posts vp
+left join impression_units iu
+  on iu.post_id = vp.id
+left join click_units cu
+  on cu.post_id = vp.id
+where vp.status = 'published'
+order by true_ctr_pct desc, clickers desc, vp.published_at desc
+limit 50;
+```
 
 ### Outbound link engagement per post
-This is a useful current-state proxy, but it is not a true CTR because we do not track post impressions or viewers.
+Useful supporting slice alongside CTR.
 
 ```sql
 select
@@ -236,18 +414,6 @@ group by vp.id, vp.creator_id, vp.published_at
 order by outbound_clicks desc, unique_clickers desc, vp.published_at desc
 limit 50;
 ```
-
-### True outbound link click-through rate per post
-Requires event instrumentation.
-
-Current schema has clicks, but not post views or post impressions. To compute true CTR per post, add a minimal event table such as `post_impressions` with:
-- `id uuid`
-- `post_id uuid`
-- `user_id uuid`
-- `created_at timestamptz`
-
-Then the KPI becomes:
-- `distinct users who clicked / distinct users who saw the post`
 
 ### Percent of published posts that generated at least one outbound click
 ```sql
