@@ -1,0 +1,153 @@
+import { StyleSheet } from "react-native";
+
+import { theme } from "../constants";
+
+export const chrome = StyleSheet.create({
+  eyebrow: {
+    color: theme.color.inkSoft,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
+  glassCard: {
+    backgroundColor: "rgba(203, 180, 154, 0.42)",
+    borderColor: "rgba(255,255,255,0.18)",
+    borderRadius: 24,
+    borderWidth: 1,
+  },
+  glassCardSoft: {
+    backgroundColor: "rgba(255,249,243,0.88)",
+    borderColor: "rgba(216,206,194,0.88)",
+    borderRadius: 24,
+    borderWidth: 1,
+  },
+  headerButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(203, 180, 154, 0.54)",
+    borderColor: "rgba(255,255,255,0.20)",
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 42,
+    minWidth: 74,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  headerButtonText: {
+    color: theme.color.white,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+  helperText: {
+    color: theme.color.muted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  input: {
+    backgroundColor: "rgba(255,250,246,0.96)",
+    borderColor: "rgba(216,206,194,0.92)",
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    color: theme.color.ink,
+    fontSize: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  label: {
+    color: theme.color.inkSoft,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    marginBottom: 6,
+    textTransform: "uppercase",
+  },
+  primaryButton: {
+    alignItems: "center",
+    backgroundColor: theme.color.accentBright,
+    borderRadius: theme.radius.pill,
+    justifyContent: "center",
+    minHeight: 50,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    shadowColor: "#7f6658",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  primaryButtonText: {
+    color: theme.color.white,
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  progressChip: {
+    backgroundColor: "rgba(255,249,243,0.22)",
+    borderColor: "rgba(255,255,255,0.16)",
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    minWidth: 84,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  progressChipActive: {
+    backgroundColor: "rgba(255,249,243,0.86)",
+    borderColor: "rgba(255,255,255,0.30)",
+  },
+  progressChipComplete: {
+    backgroundColor: "rgba(234,47,35,0.14)",
+    borderColor: "rgba(234,47,35,0.22)",
+  },
+  progressChipLabel: {
+    color: theme.color.white,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  progressChipLabelActive: {
+    color: theme.color.ink,
+  },
+  progressChipLabelComplete: {
+    color: theme.color.accentBright,
+  },
+  progressChipMeta: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 10,
+    marginTop: 3,
+  },
+  progressChipMetaActive: {
+    color: theme.color.inkSoft,
+  },
+  progressChipMetaComplete: {
+    color: "rgba(234,47,35,0.78)",
+  },
+  secondaryButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(203, 180, 154, 0.54)",
+    borderColor: "rgba(255,255,255,0.20)",
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  secondaryButtonText: {
+    color: theme.color.white,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  sectionTitle: {
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 24,
+    fontWeight: "700",
+  },
+  title: {
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 30,
+    fontWeight: "700",
+  },
+});

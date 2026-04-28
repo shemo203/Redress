@@ -17,6 +17,13 @@ type PostAnalyticsInput = {
   userId: string;
 };
 
+type PostWatchInput = {
+  completed: boolean;
+  postId: string;
+  userId: string;
+  watchMs: number;
+};
+
 export type OutboundClickDebugEntry = {
   createdAt: string;
   error: string | null;
@@ -54,10 +61,17 @@ function buildEventKey({ postId, userId }: PostAnalyticsInput) {
 }
 
 async function insertAnalyticsEventBestEffort(
-  tableName: "app_opens" | "post_impressions" | "tag_reveals",
+  tableName: "app_opens" | "post_impressions" | "tag_reveals" | "post_watches",
   payload:
     | { session_id: string; user_id: string }
     | { post_id: string; session_id: string; user_id: string }
+    | {
+        completed: boolean;
+        post_id: string;
+        session_id: string;
+        user_id: string;
+        watch_ms: number;
+      }
 ) {
   const { error } = await supabase.from(tableName).insert(payload);
   return {
@@ -141,6 +155,29 @@ export async function logTagRevealBestEffort({
   }
 
   return result;
+}
+
+export async function logPostWatchBestEffort({
+  completed,
+  postId,
+  userId,
+  watchMs,
+}: PostWatchInput) {
+  if (!Number.isFinite(watchMs) || watchMs < 1000) {
+    return {
+      error: null,
+      logged: false,
+      sessionId: analyticsSessionId,
+    };
+  }
+
+  return insertAnalyticsEventBestEffort("post_watches", {
+    completed,
+    post_id: postId,
+    session_id: analyticsSessionId,
+    user_id: userId,
+    watch_ms: Math.round(watchMs),
+  });
 }
 
 export function shouldLogOutboundClick(tagId: string, now = Date.now()) {

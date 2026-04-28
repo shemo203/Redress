@@ -28,7 +28,7 @@ export default function PrivacyScreen() {
           title: "Data we process",
           body: [
             "Account data: email address, Supabase user id, username, avatar URL, bio, sign-in/session data, and timestamps.",
-            "Content and activity data: videos, captions, clothing tags, optional product links, comments, grades, follows, reports, outbound link click logs, app-open events, post impressions, and Reveal Items opens.",
+            "Content and activity data: photos/videos, captions, clothing tags, optional product links, comments, grades, follows, reports, outbound link click logs, app-open events, post impressions, and Reveal Items opens.",
             "Technical data: app configuration needed to authenticate, store content, load the feed, prevent abuse, and debug development issues.",
           ],
         },
@@ -50,7 +50,7 @@ export default function PrivacyScreen() {
         {
           title: "Sharing and processors",
           body: [
-            "Redress uses Supabase for authentication, database, and storage. Videos may be stored in the configured Supabase Storage bucket and can be visible where the current app design makes them public.",
+            "Redress uses Supabase for authentication, database, and storage. Uploaded photos and videos may be stored in the configured Supabase Storage bucket and can be visible where the current app design makes them public.",
             "If you open a tagged clothing link, the destination website receives the request in your browser and handles that visit under its own terms and privacy policy.",
           ],
         },

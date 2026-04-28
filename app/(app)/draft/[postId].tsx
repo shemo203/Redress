@@ -1,8 +1,9 @@
-import { VideoView, useVideoPlayer } from "expo-video";
 import { Link, useLocalSearchParams } from "expo-router";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,14 +11,13 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import {
-  REQUIRE_TAG_URLS,
-  TAG_CATEGORY_OPTIONS,
-  theme,
-} from "../../../src/constants";
+import { REQUIRE_TAG_URLS, TAG_CATEGORY_OPTIONS, theme } from "../../../src/constants";
 import { useAuth } from "../../../src/features/auth";
 import { supabase } from "../../../src/lib/supabaseClient";
+import { BrandMark } from "../../../src/ui";
+import { chrome } from "../../../src/ui/chrome";
 import { validateClothingTagUrl } from "../../../src/utils";
 
 type DraftPost = {
@@ -25,6 +25,7 @@ type DraftPost = {
   created_at?: string;
   creator_id?: string;
   id: string;
+  media_type: "image" | "video";
   status: "draft" | "published";
   video_url: string;
 };
@@ -38,6 +39,7 @@ type ClothingTag = {
 };
 
 export default function DraftPostScreen() {
+  const insets = useSafeAreaInsets();
   const { postId } = useLocalSearchParams<{ postId: string }>();
   const { user } = useAuth();
 
@@ -54,9 +56,12 @@ export default function DraftPostScreen() {
   const [tagBrand, setTagBrand] = useState("");
   const [tagUrl, setTagUrl] = useState("");
 
-  const postPlayer = useVideoPlayer(post?.video_url ?? null, (player) => {
-    player.loop = true;
-  });
+  const postPlayer = useVideoPlayer(
+    post?.media_type === "video" ? post.video_url : null,
+    (player) => {
+      player.loop = true;
+    }
+  );
 
   const loadPostAndTags = async () => {
     if (!user || !postId) {
@@ -70,7 +75,7 @@ export default function DraftPostScreen() {
 
     const { data: postData, error: postError } = await supabase
       .from("video_posts")
-      .select("id, caption, status, video_url, creator_id, created_at")
+      .select("id, caption, status, video_url, media_type, creator_id, created_at")
       .eq("id", postId)
       .eq("creator_id", user.id)
       .single();
@@ -227,32 +232,13 @@ export default function DraftPostScreen() {
     setStatusMessage(null);
   };
 
-  if (isLoading) {
-    return (
-      <View style={styles.loaderWrap}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
-
-  if (!post) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Draft post</Text>
-        <Text style={styles.errorText}>
-          {statusMessage ?? "Draft post not found."}
-        </Text>
-      </View>
-    );
-  }
-
   const publishDraft = async () => {
     if (!postId) {
       setStatusMessage("Missing post id.");
       return;
     }
 
-    if (post.status === "published") {
+    if (post?.status === "published") {
       setStatusMessage("This post is already published.");
       return;
     }
@@ -284,186 +270,313 @@ export default function DraftPostScreen() {
       }
       if (message.includes("post_already_published")) {
         setStatusMessage("This post is already published.");
-        setPost({ ...post, status: "published" });
+        setPost(post ? { ...post, status: "published" } : null);
         return;
       }
       setStatusMessage(`Publish failed: ${error.message}`);
       return;
     }
 
-    setPost({ ...post, status: "published" });
+    setPost(post ? { ...post, status: "published" } : null);
     setStatusMessage("Post published successfully.");
   };
 
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Draft post</Text>
-      <Text style={styles.copy}>Post ID: {post.id}</Text>
-      <Text style={styles.copy}>Status: {post.status}</Text>
-      <Text style={styles.copy}>Caption: {post.caption || "(empty)"}</Text>
-
-      <VideoView
-        player={postPlayer}
-        style={styles.video}
-        contentFit="contain"
-        nativeControls
-      />
-
-      <Pressable
-        onPress={publishDraft}
-        disabled={isPublishing || post.status === "published"}
-        style={[
-          styles.publishButton,
-          isPublishing || post.status === "published"
-            ? styles.publishButtonDisabled
-            : undefined,
-        ]}
-      >
-        <Text style={styles.publishButtonText}>
-          {post.status === "published"
-            ? "Published"
-            : isPublishing
-              ? "Publishing..."
-              : "Publish"}
-        </Text>
-      </Pressable>
-
-      {post.status === "published" ? (
-        <Link href="/(app)/published" style={styles.feedLink}>
-          View in feed
-        </Link>
-      ) : null}
-
-      <Text style={styles.sectionTitle}>
-        {editingTagId ? "Edit tag" : "Add tag"}
-      </Text>
-
-      <Text style={styles.label}>Name *</Text>
-      <TextInput
-        style={styles.input}
-        value={tagName}
-        onChangeText={setTagName}
-        placeholder="e.g. White sneakers"
-      />
-
-      <Text style={styles.label}>Category</Text>
-      <View style={styles.categoryWrap}>
-        {TAG_CATEGORY_OPTIONS.map((option) => (
-          <Pressable
-            key={option}
-            onPress={() => setTagCategory(option)}
-            style={[
-              styles.categoryButton,
-              tagCategory === option ? styles.categoryButtonActive : undefined,
-            ]}
-          >
-            <Text
-              style={[
-                styles.categoryText,
-                tagCategory === option ? styles.categoryTextActive : undefined,
-              ]}
-            >
-              {option}
-            </Text>
-          </Pressable>
-        ))}
+  if (isLoading) {
+    return (
+      <View style={styles.loaderWrap}>
+        <ActivityIndicator color={theme.color.accentBright} size="large" />
       </View>
+    );
+  }
 
-      <Text style={styles.label}>Brand</Text>
-      <TextInput
-        style={styles.input}
-        value={tagBrand}
-        onChangeText={setTagBrand}
-        placeholder="Optional"
-      />
+  if (!post) {
+    return (
+      <View style={styles.loaderWrap}>
+        <Text style={chrome.title}>Draft missing</Text>
+        <Text style={styles.missingCopy}>{statusMessage ?? "Draft post not found."}</Text>
+      </View>
+    );
+  }
 
-      <Text style={styles.label}>
-        {REQUIRE_TAG_URLS ? "URL *" : "URL"}
-      </Text>
-      <TextInput
-        style={styles.input}
-        value={tagUrl}
-        onChangeText={setTagUrl}
-        placeholder={REQUIRE_TAG_URLS ? "https://..." : "Optional https://..."}
-        autoCapitalize="none"
-      />
-      <Text style={styles.helperText}>
-        {REQUIRE_TAG_URLS
-          ? "Use a safe http:// or https:// link."
-          : "Leave empty to save a non-clickable tag, or add a safe http:// / https:// link."}
-      </Text>
+  const progressSteps = [
+    {
+      complete: true,
+      label: "Draft",
+      meta: post.media_type,
+    },
+    {
+      complete: tags.length > 0,
+      label: "Tags",
+      meta: tags.length > 0 ? `${tags.length} saved` : "need 1+",
+    },
+    {
+      complete: post.status === "published",
+      label: "Publish",
+      meta: post.status === "published" ? "live" : "pending",
+    },
+  ];
 
-      <Pressable
-        onPress={saveTag}
-        disabled={isSavingTag}
-        style={styles.primaryButton}
+  return (
+    <View style={styles.screen}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingBottom: Math.max(insets.bottom + 136, 164),
+            paddingTop: Math.max(insets.top + 10, 24),
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.primaryButtonText}>
-          {isSavingTag
-            ? "Saving..."
-            : editingTagId
-              ? "Save tag changes"
-              : "Add tag"}
-        </Text>
-      </Pressable>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={chrome.eyebrow}>Draft editor</Text>
+            <Text style={chrome.title}>Finish the post</Text>
+          </View>
+          <BrandMark compact size={56} variant="chrome" />
+        </View>
 
-      {editingTagId ? (
-        <Pressable onPress={resetTagForm} style={styles.secondaryButton}>
-          <Text style={styles.secondaryButtonText}>Cancel edit</Text>
-        </Pressable>
-      ) : null}
-
-      {statusMessage ? (
-        <Text style={styles.statusText}>{statusMessage}</Text>
-      ) : null}
-
-      <Text style={styles.sectionTitle}>Tags ({tags.length})</Text>
-      {tags.length === 0 ? (
-        <Text style={styles.copy}>No tags yet.</Text>
-      ) : null}
-
-      {tags.map((tag) => (
-        <View key={tag.id} style={styles.tagCard}>
-          <Text style={styles.tagName}>{tag.name}</Text>
-          <Text style={styles.tagMeta}>Category: {tag.category || "other"}</Text>
-          <Text style={styles.tagMeta}>Brand: {tag.brand || "-"}</Text>
-          <Text style={styles.tagMeta}>URL: {tag.url || "No outbound link"}</Text>
-          <View style={styles.tagActions}>
-            <Pressable onPress={() => startEdit(tag)} style={styles.smallButton}>
-              <Text style={styles.smallButtonText}>Edit</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => void deleteTag(tag.id)}
-              style={[styles.smallButton, styles.deleteButton]}
-            >
-              <Text style={styles.smallButtonText}>Delete</Text>
-            </Pressable>
+        <View style={[chrome.glassCard, styles.progressCard]}>
+          <View style={styles.progressRow}>
+            {progressSteps.map((step) => (
+              <View
+                key={step.label}
+                style={[
+                  chrome.progressChip,
+                  step.complete ? chrome.progressChipComplete : chrome.progressChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    chrome.progressChipLabel,
+                    step.complete
+                      ? chrome.progressChipLabelComplete
+                      : chrome.progressChipLabelActive,
+                  ]}
+                >
+                  {step.label}
+                </Text>
+                <Text
+                  style={[
+                    chrome.progressChipMeta,
+                    step.complete
+                      ? chrome.progressChipMetaComplete
+                      : chrome.progressChipMetaActive,
+                  ]}
+                >
+                  {step.meta}
+                </Text>
+              </View>
+            ))}
           </View>
         </View>
-      ))}
-    </ScrollView>
+
+        <View style={[chrome.glassCardSoft, styles.sectionCard]}>
+          <Text style={chrome.eyebrow}>Preview</Text>
+          <Text style={styles.cardTitle}>{post.caption || "Untitled fit"}</Text>
+          <Text style={styles.metaText}>Post ID: {post.id}</Text>
+          <Text style={styles.metaText}>Status: {post.status}</Text>
+
+          <View style={styles.previewWrap}>
+            {post.media_type === "image" ? (
+              <Image source={{ uri: post.video_url }} style={styles.previewMedia} resizeMode="cover" />
+            ) : (
+              <VideoView
+                player={postPlayer}
+                style={styles.previewMedia}
+                contentFit="cover"
+                nativeControls
+              />
+            )}
+          </View>
+        </View>
+
+        <View style={[chrome.glassCardSoft, styles.sectionCard]}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={chrome.eyebrow}>Tags</Text>
+              <Text style={styles.cardTitle}>{editingTagId ? "Update item" : "Add item"}</Text>
+            </View>
+            <Text style={styles.sectionCount}>
+              {tags.length} {tags.length === 1 ? "tag" : "tags"}
+            </Text>
+          </View>
+
+          <Text style={styles.sectionCopy}>
+            Keep the outfit links clean. The post can only publish once at least one tag is saved.
+          </Text>
+
+          <Text style={chrome.label}>Name</Text>
+          <TextInput
+            style={chrome.input}
+            value={tagName}
+            onChangeText={setTagName}
+            placeholder="White sneakers"
+            placeholderTextColor={theme.color.inkSoft}
+          />
+
+          <Text style={[chrome.label, styles.inputLabel]}>Category</Text>
+          <View style={styles.categoryWrap}>
+            {TAG_CATEGORY_OPTIONS.map((option) => (
+              <Pressable
+                key={option}
+                onPress={() => setTagCategory(option)}
+                style={[
+                  styles.categoryButton,
+                  tagCategory === option ? styles.categoryButtonActive : undefined,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.categoryText,
+                    tagCategory === option ? styles.categoryTextActive : undefined,
+                  ]}
+                >
+                  {option}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={[chrome.label, styles.inputLabel]}>Brand</Text>
+          <TextInput
+            style={chrome.input}
+            value={tagBrand}
+            onChangeText={setTagBrand}
+            placeholder="Optional"
+            placeholderTextColor={theme.color.inkSoft}
+          />
+
+          <Text style={[chrome.label, styles.inputLabel]}>
+            {REQUIRE_TAG_URLS ? "URL" : "URL (optional)"}
+          </Text>
+          <TextInput
+            style={chrome.input}
+            value={tagUrl}
+            onChangeText={setTagUrl}
+            placeholder={REQUIRE_TAG_URLS ? "https://..." : "https://..."}
+            placeholderTextColor={theme.color.inkSoft}
+            autoCapitalize="none"
+          />
+          <Text style={[chrome.helperText, styles.urlHelper]}>
+            {REQUIRE_TAG_URLS
+              ? "Use a safe http:// or https:// link."
+              : "Leave empty to save a non-clickable tag, or add a safe http:// / https:// link."}
+          </Text>
+
+          <View style={styles.tagFormActions}>
+            <Pressable
+              onPress={() => void saveTag()}
+              disabled={isSavingTag}
+              style={[chrome.primaryButton, styles.tagActionButton, isSavingTag ? styles.disabled : undefined]}
+            >
+              <Text style={chrome.primaryButtonText}>
+                {isSavingTag ? "Saving..." : editingTagId ? "Save tag" : "Add tag"}
+              </Text>
+            </Pressable>
+
+            {editingTagId ? (
+              <Pressable onPress={resetTagForm} style={[chrome.secondaryButton, styles.tagActionButton]}>
+                <Text style={chrome.secondaryButtonText}>Cancel</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {tags.length === 0 ? (
+            <View style={styles.emptyTagState}>
+              <Text style={styles.emptyTagTitle}>No tags saved yet</Text>
+              <Text style={styles.emptyTagCopy}>Save at least one item to unlock publish.</Text>
+            </View>
+          ) : (
+            <View style={styles.tagList}>
+              {tags.map((tag) => (
+                <View key={tag.id} style={styles.tagRow}>
+                  <View style={styles.tagBody}>
+                    <Text style={styles.tagName}>{tag.name}</Text>
+                    <Text style={styles.tagMeta}>{tag.category || "other"}</Text>
+                    <Text style={styles.tagMeta}>{tag.brand || "No brand"}</Text>
+                    <Text numberOfLines={1} style={styles.tagMeta}>
+                      {tag.url || "No outbound link"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.tagActions}>
+                    <Pressable onPress={() => startEdit(tag)} style={styles.tagMiniButton}>
+                      <Text style={styles.tagMiniButtonText}>Edit</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void deleteTag(tag.id)}
+                      style={[styles.tagMiniButton, styles.tagMiniButtonDanger]}
+                    >
+                      <Text style={styles.tagMiniButtonText}>Delete</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {statusMessage ? (
+          <View style={[chrome.glassCardSoft, styles.feedbackCard]}>
+            <Text style={styles.feedbackText}>{statusMessage}</Text>
+          </View>
+        ) : null}
+
+        {post.status === "published" ? (
+          <View style={[chrome.glassCardSoft, styles.feedbackCard]}>
+            <Text style={styles.feedbackText}>This post is live. You can head back to the feed now.</Text>
+            <Link href="/(app)" style={styles.feedLink}>
+              Back to feed
+            </Link>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      {post.status === "draft" ? (
+        <View style={[styles.footerBar, { paddingBottom: Math.max(insets.bottom + 10, 18) }]}>
+          <Pressable
+            onPress={() => void publishDraft()}
+            disabled={isPublishing}
+            style={[chrome.primaryButton, styles.publishButton, isPublishing ? styles.disabled : undefined]}
+          >
+            <Text style={chrome.primaryButtonText}>
+              {isPublishing ? "Publishing..." : "Publish"}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  cardTitle: {
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 24,
+    fontWeight: "700",
+    marginTop: 4,
+  },
   categoryButton: {
-    backgroundColor: theme.color.bgPanel,
-    borderColor: theme.color.border,
+    backgroundColor: "rgba(203, 180, 154, 0.18)",
+    borderColor: "rgba(203, 180, 154, 0.30)",
     borderRadius: theme.radius.pill,
     borderWidth: 1,
     marginBottom: 8,
     marginRight: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
   },
   categoryButtonActive: {
-    backgroundColor: theme.color.accent,
-    borderColor: theme.color.accent,
+    backgroundColor: theme.color.accentBright,
+    borderColor: theme.color.accentBright,
   },
   categoryText: {
     color: theme.color.ink,
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   categoryTextActive: {
     color: theme.color.white,
@@ -472,141 +585,191 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
   },
-  container: {
-    backgroundColor: theme.color.bg,
+  disabled: {
+    opacity: 0.6,
+  },
+  emptyTagCopy: {
+    color: theme.color.inkSoft,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  emptyTagState: {
+    backgroundColor: "rgba(255,249,243,0.58)",
+    borderColor: "rgba(216,206,194,0.72)",
+    borderRadius: 18,
+    borderWidth: 1,
+    marginTop: 14,
+    padding: 14,
+  },
+  emptyTagTitle: {
+    color: theme.color.ink,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  feedbackCard: {
+    marginTop: 14,
     padding: 16,
   },
-  copy: {
-    color: theme.color.muted,
-    marginBottom: 4,
-  },
-  deleteButton: {
-    backgroundColor: theme.color.danger,
-  },
-  errorText: {
-    color: theme.color.danger,
-    marginTop: 12,
-  },
-  input: {
-    backgroundColor: theme.color.bgPanel,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    marginBottom: 10,
-    padding: 10,
+  feedbackText: {
+    color: theme.color.inkSoft,
+    fontSize: 14,
+    lineHeight: 20,
   },
   feedLink: {
-    color: theme.color.accent,
-    fontSize: 15,
+    color: theme.color.accentBright,
+    fontSize: 14,
     fontWeight: "700",
     marginTop: 10,
   },
-  helperText: {
-    color: theme.color.muted,
-    fontSize: 12,
-    marginBottom: 10,
-    marginTop: -2,
+  footerBar: {
+    backgroundColor: "rgba(247,241,234,0.96)",
+    borderTopColor: "rgba(216,206,194,0.72)",
+    borderTopWidth: 1,
+    bottom: 0,
+    left: 0,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    position: "absolute",
+    right: 0,
   },
-  label: {
-    color: theme.color.ink,
-    fontWeight: "600",
-    marginBottom: 6,
+  headerRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  inputLabel: {
+    marginTop: 14,
   },
   loaderWrap: {
     alignItems: "center",
+    backgroundColor: theme.color.shell,
     flex: 1,
     justifyContent: "center",
+    paddingHorizontal: 24,
   },
-  primaryButton: {
-    alignItems: "center",
-    backgroundColor: theme.color.accent,
-    borderRadius: theme.radius.pill,
-    marginTop: 6,
-    paddingVertical: 12,
+  metaText: {
+    color: theme.color.inkSoft,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  missingCopy: {
+    color: theme.color.inkSoft,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 10,
+    textAlign: "center",
+  },
+  previewMedia: {
+    borderRadius: 24,
+    height: "100%",
+    width: "100%",
+  },
+  previewWrap: {
+    backgroundColor: "rgba(245,238,231,0.76)",
+    borderColor: "rgba(216,206,194,0.72)",
+    borderRadius: 24,
+    borderWidth: 1,
+    height: 280,
+    marginTop: 16,
+    overflow: "hidden",
+  },
+  progressCard: {
+    padding: 16,
+  },
+  progressRow: {
+    flexDirection: "row",
+    gap: 8,
   },
   publishButton: {
-    alignItems: "center",
-    backgroundColor: theme.color.accent,
-    borderRadius: theme.radius.pill,
+    width: "100%",
+  },
+  screen: {
+    backgroundColor: theme.color.shell,
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 18,
+  },
+  sectionCard: {
     marginTop: 14,
-    paddingVertical: 12,
+    padding: 16,
   },
-  publishButtonDisabled: {
-    backgroundColor: "#cc9b95",
+  sectionCopy: {
+    color: theme.color.inkSoft,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 12,
   },
-  publishButtonText: {
-    color: "#fff",
+  sectionCount: {
+    color: theme.color.inkSoft,
+    fontSize: 12,
     fontWeight: "700",
   },
-  primaryButtonText: {
-    color: "#fff",
-    fontWeight: "700",
+  sectionHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
-  secondaryButton: {
-    alignItems: "center",
-    backgroundColor: "#8f7d70",
-    borderRadius: theme.radius.pill,
+  tagActionButton: {
+    flex: 1,
+  },
+  tagActions: {
+    gap: 8,
+    justifyContent: "center",
+    marginLeft: 10,
+  },
+  tagBody: {
+    flex: 1,
+  },
+  tagFormActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+  tagList: {
     marginTop: 8,
-    paddingVertical: 10,
   },
-  secondaryButtonText: {
-    color: "#fff",
-    fontWeight: "700",
+  tagMeta: {
+    color: theme.color.inkSoft,
+    fontSize: 12,
+    marginTop: 3,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 10,
-    marginTop: 18,
-  },
-  smallButton: {
-    backgroundColor: theme.color.accent,
+  tagMiniButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(203, 180, 154, 0.54)",
+    borderColor: "rgba(255,255,255,0.20)",
     borderRadius: theme.radius.pill,
-    marginRight: 8,
+    borderWidth: 1,
+    minWidth: 74,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  smallButtonText: {
-    color: "#fff",
-    fontWeight: "700",
+  tagMiniButtonDanger: {
+    backgroundColor: "rgba(184,64,54,0.86)",
+    borderColor: "rgba(184,64,54,0.96)",
   },
-  statusText: {
-    marginTop: 10,
-  },
-  tagActions: {
-    flexDirection: "row",
-    marginTop: 10,
-  },
-  tagCard: {
-    backgroundColor: theme.color.bgPanel,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    marginBottom: 10,
-    padding: 12,
-  },
-  tagMeta: {
-    color: theme.color.muted,
+  tagMiniButtonText: {
+    color: theme.color.white,
     fontSize: 12,
-    marginTop: 2,
+    fontWeight: "700",
   },
   tagName: {
     color: theme.color.ink,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
   },
-  title: {
-    color: theme.color.ink,
-    fontFamily: "serif",
-    fontSize: 34,
-    fontWeight: "700",
-    marginBottom: 10,
-  },
-  video: {
-    backgroundColor: "#000",
-    borderRadius: 8,
-    height: 220,
+  tagRow: {
+    backgroundColor: "rgba(255,249,243,0.76)",
+    borderColor: "rgba(216,206,194,0.82)",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
     marginTop: 10,
-    width: "100%",
+    padding: 12,
+  },
+  urlHelper: {
+    marginTop: 8,
   },
 });

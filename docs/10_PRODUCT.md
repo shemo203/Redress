@@ -17,9 +17,25 @@ Ship the MVP for an Expo client backed by Supabase.
 
 ## Compose Flow
 - The primary post flow lives on the upload screen.
-- Creators pick a video, add a caption, add clothing tags inline, and publish from the same screen.
+- Creators pick a single photo or video, add a caption, add clothing tags inline, and publish from the same screen.
+- The publish CTA sits directly in the create flow under the items section instead of floating over the screen.
+- The upload and draft editor surfaces now use the same guided three-step framing:
+  - `Draft`
+  - `Tags`
+  - `Publish`
 - Saving a draft is still supported, but it is a fallback path instead of a required step in the main flow.
 - Publishing still requires at least one clothing tag and still goes through `publish_post(post_id)` for the final status flip.
+- Each post stores `media_type = 'image' | 'video'` so the feed and profile can render the correct media presentation.
+
+## Profile MVP Rules
+- The signed-in profile supports updating the profile photo from the device photo library.
+- The signed-in profile supports updating the profile description/bio.
+- Profile photo uploads reuse the existing authenticated storage path and update `profiles.avatar_url`.
+- Profile management actions are intentionally minimal in the account menu:
+  - view public profile
+  - share profile
+  - privacy/support requests
+  - sign out
 
 ## Q5 Tag URL Rule
 - If `EXPO_PUBLIC_REQUIRE_TAG_URLS=true`:

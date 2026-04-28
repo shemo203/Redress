@@ -26,14 +26,14 @@ Redress is a fashion short-form video app (TikTok-like feed) with:
 - `app/(auth)/*`: sign-in and auth flow
 - `app/(public)/terms.tsx`: in-app Terms of Use page linked from onboarding
 - `app/(public)/privacy.tsx`: in-app Privacy Notice page linked from onboarding
-- `app/(app)/index.tsx`: authenticated feed / published video stream
-- `app/(app)/upload.tsx`: create and upload a new post
-- `app/(app)/draft/[postId].tsx`: draft editing and publish flow
+- `app/(app)/index.tsx`: authenticated feed / published media stream
+- `app/(app)/upload.tsx`: premium single-screen creator flow with large media preview, minimal caption card, item sheet, save draft, and sticky publish CTA
+- `app/(app)/draft/[postId].tsx`: matching draft editor for tag cleanup and final publish
 - `app/(app)/published.tsx`: dev-friendly published posts listing
-- `app/(app)/account.tsx`: account overview, privacy request actions, dev/debug tools, links to public profile and search
+- `app/(app)/account.tsx`: reference-style account profile with top search, overflow menu for secondary actions, avatar editing, and snapshot-based media grid that opens selected posts in the feed
 - `app/(app)/moderation/reports.tsx`: admin-only reports review queue with filters and review/resolve actions
 - `app/(app)/comments/[postId].tsx`: published-post comments screen with refresh and composer
-- `app/(app)/profile/[profileId].tsx`: public profile view with follow/unfollow and published posts
+- `app/(app)/profile/[profileId].tsx`: public profile view that mirrors the premium account layout, with top search/back controls, follow/unfollow, and snapshot-based media grid that opens selected posts in the feed
 - `app/(app)/search.tsx`: username search for profiles
 - `app/(app)/dev-seed.tsx`: dev-only seeding instructions
 

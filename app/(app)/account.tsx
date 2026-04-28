@@ -1,24 +1,26 @@
+import * as ImagePicker from "expo-image-picker";
+import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
-import { Link, useFocusEffect } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  DEV_SEED_ENABLED,
   isModerationAdminUser,
   theme,
 } from "../../src/constants";
-import {
-  getRecentOutboundClickDebugEntries,
-  type OutboundClickDebugEntry,
-} from "../../src/features/analytics";
 import { useAuth } from "../../src/features/auth";
 import {
   fetchMyPrivacyRequests,
@@ -28,43 +30,53 @@ import {
   type PrivacyRequestType,
   submitPrivacyRequest,
 } from "../../src/features/privacy";
-import { fetchMyReports, type ReportRecord } from "../../src/features/reports";
-import {
-  addCommentToPost,
-  fetchFollowCounts,
-  fetchProfileById,
-  fetchProfileByUsername,
-  fetchUserPosts,
-  followUser,
-  isFollowingProfile,
-  isUuidLike,
-  listCommentsForPost,
-  type FollowCounts,
-  type SocialComment,
-  type SocialProfile,
-  unfollowUser,
-} from "../../src/features/social";
+import { fetchFollowCounts, type FollowCounts } from "../../src/features/social";
 import { supabase } from "../../src/lib/supabaseClient";
-import { BrandMark } from "../../src/ui";
+import { GlassButton, GlassCard, MediaSnapshot, ProfileAvatar } from "../../src/ui";
+import { chrome } from "../../src/ui/chrome";
+
+type AccountProfile = {
+  avatar_url: string | null;
+  bio: string | null;
+  username: string;
+};
 
 type ProfileSummary = {
   avgGrade: number | null;
   draftCount: number;
   publishedCount: number;
+  totalCount: number;
 };
 
 type FitPreview = {
+  avgGrade: number | null;
   caption: string;
   created_at: string;
   id: string;
+  media_type: "image" | "video";
   status: "draft" | "published";
+  video_url: string | null;
 };
+
+const PROFILE_BIO_MAX_LENGTH = 160;
 
 function formatUsername(raw: string | null | undefined) {
   if (raw && raw.trim().length > 0) {
     return raw.trim();
   }
   return "your.style";
+}
+
+function formatDisplayName(username: string) {
+  const formatted = username
+    .replace(/[_\.]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+  return formatted || "Your Profile";
 }
 
 function getRequestFailureMessage(error: unknown, fallback: string) {
@@ -74,33 +86,76 @@ function getRequestFailureMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function formatCompactMetric(value: number) {
+  if (value < 1000) {
+    return `${value}`;
+  }
+
+  return new Intl.NumberFormat("en", {
+    maximumFractionDigits: 1,
+    notation: "compact",
+  }).format(value);
+}
+
+function ProfileGridTile({
+  fit,
+  onPress,
+}: {
+  fit: FitPreview;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.fitTile, pressed ? styles.fitTilePressed : undefined]}
+    >
+      <MediaSnapshot
+        mediaType={fit.media_type}
+        placeholderLabel={fit.media_type === "video" ? "Video" : "No media"}
+        showVideoBadge={fit.media_type === "video"}
+        style={styles.fitTileImage}
+        uri={fit.video_url}
+      />
+
+      {fit.avgGrade != null ? (
+        <View style={styles.fitScorePill}>
+          <Text style={styles.fitScoreText}>{fit.avgGrade.toFixed(1)}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
 export default function AccountScreen() {
-  const { profile, sessionLoaded, user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
+  const router = useRouter();
+  const { profile, refreshProfile, user } = useAuth();
+
+  const [accountCounts, setAccountCounts] = useState<FollowCounts | null>(null);
+  const [accountProfile, setAccountProfile] = useState<AccountProfile | null>(null);
+  const [editProfileAvatarUri, setEditProfileAvatarUri] = useState<string | null>(null);
+  const [editProfileBio, setEditProfileBio] = useState("");
+  const [editProfileMessage, setEditProfileMessage] = useState<string | null>(null);
+  const [editProfileVisible, setEditProfileVisible] = useState(false);
+  const [selectedAvatarAsset, setSelectedAvatarAsset] =
+    useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [debugClicks, setDebugClicks] = useState<OutboundClickDebugEntry[]>([]);
-  const [debugReports, setDebugReports] = useState<ReportRecord[]>([]);
   const [isSubmittingPrivacy, setIsSubmittingPrivacy] = useState(false);
   const [privacyDetails, setPrivacyDetails] = useState("");
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
   const [privacyRequests, setPrivacyRequests] = useState<PrivacyRequestRecord[]>([]);
   const [privacySelection, setPrivacySelection] = useState<PrivacyRequestType | null>(null);
   const [privacyStatus, setPrivacyStatus] = useState<string | null>(null);
-  const [socialComments, setSocialComments] = useState<SocialComment[]>([]);
-  const [socialCommentText, setSocialCommentText] = useState("");
-  const [socialCounts, setSocialCounts] = useState<FollowCounts | null>(null);
-  const [socialIsFollowing, setSocialIsFollowing] = useState(false);
-  const [socialPostId, setSocialPostId] = useState("");
-  const [socialStatus, setSocialStatus] = useState<string | null>(null);
-  const [socialTargetInput, setSocialTargetInput] = useState("");
-  const [socialTargetPosts, setSocialTargetPosts] = useState(0);
-  const [socialTargetProfile, setSocialTargetProfile] = useState<SocialProfile | null>(
-    null
-  );
   const [summary, setSummary] = useState<ProfileSummary>({
     avgGrade: null,
     draftCount: 0,
     publishedCount: 0,
+    totalCount: 0,
   });
   const [fits, setFits] = useState<FitPreview[]>([]);
 
@@ -111,9 +166,9 @@ export default function AccountScreen() {
       const loadProfileData = async () => {
         if (!user?.id) {
           if (!cancelled) {
+            setAccountCounts(null);
+            setAccountProfile(null);
             setFits([]);
-            setDebugClicks([]);
-            setDebugReports([]);
             setPrivacyRequests([]);
             setIsLoading(false);
           }
@@ -123,35 +178,82 @@ export default function AccountScreen() {
         setIsLoading(true);
         setStatusMessage(null);
         try {
-          const { data: posts, error: postsError } = await supabase
-            .from("video_posts")
-            .select("id, caption, created_at, status")
-            .eq("creator_id", user.id)
-            .order("created_at", { ascending: false })
-            .limit(12);
+          const [profileResult, postsResult, accountCountsResult] = await Promise.all([
+            supabase
+              .from("profiles")
+              .select("username, avatar_url, bio")
+              .eq("id", user.id)
+              .maybeSingle(),
+            supabase
+              .from("video_posts")
+              .select("id, caption, created_at, status, media_type, video_url")
+              .eq("creator_id", user.id)
+              .order("created_at", { ascending: false })
+              .limit(24),
+            fetchFollowCounts(user.id),
+          ]);
 
-          if (postsError) {
+          if (postsResult.error) {
             if (!cancelled) {
-              setStatusMessage(`Failed to load profile stats: ${postsError.message}`);
+              setStatusMessage(`Failed to load profile stats: ${postsResult.error.message}`);
             }
             return;
           }
 
-          const typedPosts = (posts ?? []) as FitPreview[];
-          const publishedIds = typedPosts
-            .filter((post) => post.status === "published")
-            .map((post) => post.id);
+          if (profileResult.error && __DEV__) {
+            console.error("Failed to load account profile", profileResult.error);
+          }
+          if (accountCountsResult.error && __DEV__) {
+            console.error("Failed to load account follow counts", accountCountsResult.error);
+          }
+
+          const resolvedProfile: AccountProfile = {
+            avatar_url: profileResult.data?.avatar_url ?? profile?.avatar_url ?? null,
+            bio: profileResult.data?.bio ?? null,
+            username: formatUsername(
+              profileResult.data?.username ?? profile?.username ?? user.email?.split("@")[0]
+            ),
+          };
+
+          const typedPosts = (postsResult.data ?? []) as Array<Omit<FitPreview, "avgGrade">>;
+          const publishedPosts = typedPosts.filter((post) => post.status === "published");
+          const publishedIds = publishedPosts.map((post) => post.id);
 
           let avgGrade: number | null = null;
+          let gradeMap = new Map<string, number>();
+
           if (publishedIds.length > 0) {
             const { data: grades } = await supabase
               .from("grades")
-              .select("value")
+              .select("post_id, value")
               .in("post_id", publishedIds);
 
             if (grades && grades.length > 0) {
-              const sum = grades.reduce((total, grade) => total + grade.value, 0);
-              avgGrade = Math.round((sum / grades.length) * 10) / 10;
+              const groupedGrades = new Map<string, number[]>();
+              for (const grade of grades) {
+                const nextValues = groupedGrades.get(grade.post_id) ?? [];
+                nextValues.push(grade.value);
+                groupedGrades.set(grade.post_id, nextValues);
+              }
+
+              const perPostAverages = Array.from(groupedGrades.entries()).map(
+                ([postId, values]) => {
+                  const average =
+                    Math.round(
+                      (values.reduce((total, value) => total + value, 0) / values.length) *
+                        10
+                    ) / 10;
+                  return [postId, average] as const;
+                }
+              );
+
+              gradeMap = new Map(perPostAverages);
+              avgGrade =
+                Math.round(
+                  (perPostAverages.reduce((total, [, value]) => total + value, 0) /
+                    perPostAverages.length) *
+                    10
+                ) / 10;
             }
           }
 
@@ -159,39 +261,33 @@ export default function AccountScreen() {
             return;
           }
 
+          setAccountProfile(resolvedProfile);
+          setAccountCounts(accountCountsResult.error ? null : accountCountsResult.data);
           setSummary({
             avgGrade,
             draftCount: typedPosts.filter((post) => post.status === "draft").length,
-            publishedCount: typedPosts.filter((post) => post.status === "published").length,
+            publishedCount: publishedPosts.length,
+            totalCount: typedPosts.length,
           });
-          setFits(typedPosts.slice(0, 6));
-          const [reportsResult, privacyRequestsResult] = await Promise.all([
-            __DEV__ ? fetchMyReports(user.id) : Promise.resolve({ data: [], error: null }),
-            fetchMyPrivacyRequests(user.id),
-          ]);
+          setFits(
+            publishedPosts.map((post) => ({
+              ...post,
+              avgGrade: gradeMap.get(post.id) ?? null,
+            }))
+          );
+
+          const privacyRequestsResult = await fetchMyPrivacyRequests(user.id);
+
           if (cancelled) {
             return;
           }
-          if (__DEV__ && reportsResult.error && !cancelled) {
-            console.error("Failed to load my reports", reportsResult.error);
-          }
-          setDebugClicks(
-            __DEV__
-              ? getRecentOutboundClickDebugEntries().filter(
-                  (entry) => entry.userId === user.id
-                )
-              : []
-          );
-          setDebugReports(__DEV__ ? reportsResult.data : []);
           setPrivacyRequests(privacyRequestsResult.data);
-          if (privacyRequestsResult.error && !cancelled) {
+          if (privacyRequestsResult.error) {
             setPrivacyStatus(privacyRequestsResult.error);
           }
         } catch (error) {
           if (!cancelled) {
-            setStatusMessage(
-              getRequestFailureMessage(error, "Failed to load profile stats")
-            );
+            setStatusMessage(getRequestFailureMessage(error, "Failed to load profile stats"));
           }
           if (__DEV__) {
             console.error("Failed to load profile data", error);
@@ -208,7 +304,7 @@ export default function AccountScreen() {
       return () => {
         cancelled = true;
       };
-    }, [user?.id])
+    }, [profile?.avatar_url, profile?.username, user?.email, user?.id])
   );
 
   const handleSignOut = async () => {
@@ -270,615 +366,671 @@ export default function AccountScreen() {
         )} request submitted. We will handle this manually for MVP testing.`
       );
     } catch (error) {
-      setPrivacyStatus(
-        getRequestFailureMessage(error, "Could not submit privacy request")
-      );
+      setPrivacyStatus(getRequestFailureMessage(error, "Could not submit privacy request"));
     } finally {
       setIsSubmittingPrivacy(false);
     }
   };
 
   const displayUsername = formatUsername(profile?.username ?? user?.email?.split("@")[0]);
+  const resolvedUsername = accountProfile?.username ?? displayUsername;
+  const displayName = formatDisplayName(resolvedUsername);
+  const profileBio =
+    accountProfile?.bio?.trim() ||
+    "Curating conscious style | Based in Stockholm | Lover of linen and vintage finds";
   const canReviewReports = isModerationAdminUser(user?.id);
+  const heroHeight = Math.max(250, Math.min(320, Math.round(screenHeight * 0.31)));
 
-  const resolveSocialTarget = async () => {
-    const trimmed = socialTargetInput.trim();
-    if (!trimmed) {
-      setSocialStatus("Enter a username or profile id.");
-      return;
+  const handleShareProfile = async () => {
+    try {
+      await Share.share({
+        message: `Check out @${resolvedUsername} on Redress.`,
+      });
+    } catch (error) {
+      if (__DEV__) {
+        console.error("Failed to share profile", error);
+      }
+      setStatusMessage("Could not open share sheet.");
     }
-
-    setSocialStatus(null);
-
-    const profileResult = isUuidLike(trimmed)
-      ? await fetchProfileById(trimmed)
-      : await fetchProfileByUsername(trimmed);
-
-    if (profileResult.error) {
-      setSocialStatus(profileResult.error);
-      return;
-    }
-
-    if (!profileResult.data) {
-      setSocialTargetProfile(null);
-      setSocialCounts(null);
-      setSocialTargetPosts(0);
-      setSocialIsFollowing(false);
-      setSocialStatus("Profile not found.");
-      return;
-    }
-
-    const [countsResult, followResult, postsResult] = await Promise.all([
-      fetchFollowCounts(profileResult.data.id),
-      user?.id
-        ? isFollowingProfile(user.id, profileResult.data.id)
-        : Promise.resolve({ data: false, error: null }),
-      fetchUserPosts(profileResult.data.id, 6),
-    ]);
-
-    setSocialTargetProfile(profileResult.data);
-    setSocialCounts(countsResult.data);
-    setSocialIsFollowing(followResult.data);
-    setSocialTargetPosts(postsResult.data.length);
-
-    if (countsResult.error) {
-      setSocialStatus(countsResult.error);
-      return;
-    }
-    if (followResult.error) {
-      setSocialStatus(followResult.error);
-      return;
-    }
-    if (postsResult.error) {
-      setSocialStatus(postsResult.error);
-      return;
-    }
-
-    setSocialStatus("Profile loaded.");
   };
 
-  const handleFollow = async () => {
-    if (!user?.id || !socialTargetProfile) {
-      setSocialStatus("Pick a target profile first.");
-      return;
-    }
-
-    const result = await followUser(user.id, socialTargetProfile.id);
-    if (result.error) {
-      setSocialStatus(result.error);
-      return;
-    }
-
-    const countsResult = await fetchFollowCounts(socialTargetProfile.id);
-    setSocialCounts(countsResult.data);
-    setSocialIsFollowing(true);
-    setSocialStatus("Follow saved.");
+  const handleOpenEditProfile = () => {
+    setEditProfileAvatarUri(accountProfile?.avatar_url ?? profile?.avatar_url ?? null);
+    setEditProfileBio(accountProfile?.bio?.trim() ?? "");
+    setSelectedAvatarAsset(null);
+    setEditProfileMessage(null);
+    setEditProfileVisible(true);
   };
 
-  const handleUnfollow = async () => {
-    if (!user?.id || !socialTargetProfile) {
-      setSocialStatus("Pick a target profile first.");
-      return;
-    }
+  const handlePickProfilePhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setEditProfileMessage("Media library permission is required to update your profile photo.");
+        return;
+      }
 
-    const result = await unfollowUser(user.id, socialTargetProfile.id);
-    if (result.error) {
-      setSocialStatus(result.error);
-      return;
-    }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        mediaTypes: ["images"],
+        quality: 0.9,
+      });
 
-    const countsResult = await fetchFollowCounts(socialTargetProfile.id);
-    setSocialCounts(countsResult.data);
-    setSocialIsFollowing(false);
-    setSocialStatus("Follow removed.");
+      if (result.canceled) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      if (!asset?.uri) {
+        setEditProfileMessage("No image selected.");
+        return;
+      }
+
+      setSelectedAvatarAsset(asset);
+      setEditProfileAvatarUri(asset.uri);
+      setEditProfileMessage(null);
+    } catch (error) {
+      setEditProfileMessage(getRequestFailureMessage(error, "Could not choose profile photo"));
+      if (__DEV__) {
+        console.error("Failed to pick avatar", error);
+      }
+    }
   };
 
-  const handleLoadComments = async () => {
-    const trimmedPostId = socialPostId.trim();
-    if (!trimmedPostId) {
-      setSocialStatus("Enter a post id.");
+  const handleSaveProfile = async () => {
+    if (!user?.id) {
+      setEditProfileMessage("You must be signed in.");
       return;
     }
 
-    const result = await listCommentsForPost(trimmedPostId);
-    if (result.error) {
-      setSocialStatus(result.error);
-      return;
+    setIsSavingProfile(true);
+    setEditProfileMessage(null);
+    setStatusMessage(null);
+
+    try {
+      let nextAvatarUrl = accountProfile?.avatar_url ?? profile?.avatar_url ?? null;
+
+      if (selectedAvatarAsset?.uri) {
+        const response = await fetch(selectedAvatarAsset.uri);
+        if (!response.ok) {
+          throw new Error("Unable to read selected image.");
+        }
+
+        const imageBytes = await response.arrayBuffer();
+        const extension =
+          selectedAvatarAsset.fileName?.split(".").pop()?.toLowerCase() ||
+          selectedAvatarAsset.mimeType?.split("/").pop()?.toLowerCase() ||
+          "jpg";
+        const filePath = `${user.id}/avatars/${Date.now()}.${extension}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("media")
+          .upload(filePath, imageBytes, {
+            contentType: selectedAvatarAsset.mimeType ?? `image/${extension}`,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw new Error(`Photo upload failed: ${uploadError.message}`);
+        }
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("media").getPublicUrl(filePath);
+
+        nextAvatarUrl = publicUrl;
+      }
+
+      const nextBio = editProfileBio.trim().slice(0, PROFILE_BIO_MAX_LENGTH);
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          avatar_url: nextAvatarUrl,
+          bio: nextBio.length > 0 ? nextBio : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+
+      if (updateError) {
+        throw new Error(`Profile update failed: ${updateError.message}`);
+      }
+
+      setAccountProfile((current) =>
+        current
+          ? {
+              ...current,
+              avatar_url: nextAvatarUrl,
+              bio: nextBio.length > 0 ? nextBio : null,
+            }
+          : {
+              avatar_url: nextAvatarUrl,
+              bio: nextBio.length > 0 ? nextBio : null,
+              username: resolvedUsername,
+            }
+      );
+      await refreshProfile();
+      setEditProfileVisible(false);
+      setSelectedAvatarAsset(null);
+      setStatusMessage("Profile updated.");
+    } catch (error) {
+      setEditProfileMessage(getRequestFailureMessage(error, "Could not update profile"));
+      if (__DEV__) {
+        console.error("Failed to save profile", error);
+      }
+    } finally {
+      setIsSavingProfile(false);
     }
-
-    setSocialComments(result.data);
-    setSocialStatus(`Loaded ${result.data.length} comments.`);
-  };
-
-  const handleAddComment = async () => {
-    const trimmedPostId = socialPostId.trim();
-    if (!user?.id || !trimmedPostId) {
-      setSocialStatus("Enter a post id first.");
-      return;
-    }
-
-    const result = await addCommentToPost(trimmedPostId, user.id, socialCommentText);
-    if (result.error) {
-      setSocialStatus(result.error);
-      return;
-    }
-
-    setSocialCommentText("");
-    const reloadResult = await listCommentsForPost(trimmedPostId);
-    if (reloadResult.error) {
-      setSocialStatus(reloadResult.error);
-      return;
-    }
-
-    setSocialComments(reloadResult.data);
-    setSocialStatus("Comment added.");
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.heroGlow} />
+    <>
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          {
+            paddingBottom: Math.max(insets.bottom + 112, 132),
+            paddingTop: Math.max(insets.top + 10, 24),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.topBar}>
+          <View style={styles.topBarActions}>
+            <Link asChild href="/(app)/search">
+              <Pressable style={styles.topBarButton}>
+                <Text style={styles.topBarButtonText}>Search</Text>
+              </Pressable>
+            </Link>
 
-      <View style={styles.headerRow}>
-        <Text style={styles.heading}>@{displayUsername}</Text>
-        <View style={styles.headerActions}>
-          <Link asChild href="/(app)/search">
-            <Pressable style={styles.headerPill}>
-              <Text style={styles.headerPillText}>Search</Text>
+            <Pressable onPress={() => setMenuVisible(true)} style={styles.topBarMenuButton}>
+              <Text style={styles.topBarMenuText}>☰</Text>
             </Pressable>
-          </Link>
-          <View style={styles.settingsButton}>
-            <Text style={styles.settingsGlyph}>⚙</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.heroCard}>
-        <View style={styles.statsColumn}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{summary.publishedCount}</Text>
-            <Text style={styles.statLabel}>Published</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{summary.draftCount}</Text>
-            <Text style={styles.statLabel}>Drafts</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={[styles.statValue, styles.statValueAccent]}>
-              {summary.avgGrade != null ? summary.avgGrade.toFixed(1) : "—"}
-            </Text>
-            <Text style={styles.statLabel}>AVG.</Text>
           </View>
         </View>
 
-        <View style={styles.heroSplit} />
-        <View style={styles.monogramWrap}>
-          <BrandMark elevated size={92} variant="chrome" />
-          <Text style={styles.monogramCopy}>Your profile, fits, and score summary.</Text>
-        </View>
-      </View>
-
-      {user?.id ? (
-        <View style={styles.profileActionsRow}>
-          <Link asChild href={`/(app)/profile/${user.id}`}>
-            <Pressable style={styles.profileActionButton}>
-              <Text style={styles.profileActionText}>View public profile</Text>
-            </Pressable>
-          </Link>
-          <Link asChild href="/(app)/search">
-            <Pressable style={[styles.profileActionButton, styles.profileActionButtonGhost]}>
-              <Text
-                style={[styles.profileActionText, styles.profileActionTextGhost]}
-              >
-                Search people
-              </Text>
-            </Pressable>
-          </Link>
-        </View>
-      ) : null}
-
-      {canReviewReports ? (
-        <Link asChild href="/(app)/moderation/reports">
-          <Pressable style={styles.moderationLink}>
-            <Text style={styles.moderationLinkText}>Open reports review</Text>
-          </Pressable>
-        </Link>
-      ) : null}
-
-      <Text style={styles.sectionTitle}>Your Fits</Text>
-
-      {isLoading ? (
-        <View style={styles.loadingCard}>
-          <ActivityIndicator color={theme.color.accentBright} />
-          <Text style={styles.loadingText}>Loading your profile…</Text>
-        </View>
-      ) : fits.length === 0 ? (
-        <View style={styles.emptyFitsCard}>
-          <Text style={styles.emptyFitsTitle}>No fits posted yet</Text>
-          <Text style={styles.emptyFitsCopy}>
-            Use the new post button in the dock to upload your first fit.
-          </Text>
-        </View>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.fitRow}
-        >
-          {fits.map((fit, index) => {
-            const isDarkTile = index % 3 !== 0;
-
-            return (
-              <View
-                key={fit.id}
-                style={[
-                  styles.fitTile,
-                  index % 3 === 1
-                    ? styles.fitTileAccent
-                    : index % 3 === 2
-                      ? styles.fitTileInk
-                      : undefined,
-                ]}
-              >
-                <Text style={[styles.fitStatus, isDarkTile ? styles.fitTextOnDark : undefined]}>
-                  {fit.status.toUpperCase()}
-                </Text>
-                <Text
-                  numberOfLines={2}
-                  style={[styles.fitCaption, isDarkTile ? styles.fitTextOnDark : undefined]}
-                >
-                  {fit.caption || "Untitled fit"}
-                </Text>
-                <Text style={[styles.fitMeta, isDarkTile ? styles.fitMetaOnDark : undefined]}>
-                  {new Date(fit.created_at).toLocaleDateString()}
-                </Text>
-              </View>
-            );
-          })}
-        </ScrollView>
-      )}
-
-      <View style={styles.infoCard}>
-        <Text style={styles.infoLabel}>Email</Text>
-        <Text style={styles.infoValue}>{user?.email ?? "-"}</Text>
-
-        <Text style={styles.infoLabel}>User ID</Text>
-        <Text numberOfLines={2} style={styles.infoValue}>
-          {user?.id ?? "-"}
-        </Text>
-
-        <Text style={styles.infoLabel}>Session loaded</Text>
-        <Text style={styles.infoValue}>{sessionLoaded ? "yes" : "no"}</Text>
-
-        <Pressable
-          disabled={isSubmitting}
-          onPress={handleSignOut}
-          style={styles.signOutButton}
-        >
-          <Text style={styles.signOutText}>
-            {isSubmitting ? "Signing out..." : "Sign out"}
-          </Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.privacyCard}>
-        <Text style={styles.privacyHeading}>Privacy requests</Text>
-        <Text style={styles.privacyCopy}>
-          For MVP testing, account deletion and data export are handled as manual support
-          requests. Submitting one stores your request in Redress so it can be reviewed and
-          completed outside the app.
-        </Text>
-
-        <Text style={styles.privacyLabel}>Optional note</Text>
-        <TextInput
-          multiline
-          onChangeText={setPrivacyDetails}
-          placeholder="Add context for support if needed"
-          placeholderTextColor={theme.color.inkSoft}
-          style={styles.privacyInput}
-          textAlignVertical="top"
-          value={privacyDetails}
+        <View
+          pointerEvents="none"
+          style={[styles.heroGlow, styles.heroGlowPrimary]}
         />
-        <Text style={styles.privacyHint}>
-          {privacyDetails.trim().length}/{PRIVACY_REQUEST_DETAILS_MAX_LENGTH}
-        </Text>
+        <View
+          pointerEvents="none"
+          style={[styles.heroGlow, styles.heroGlowSecondary]}
+        />
 
-        <View style={styles.profileActionsRow}>
-          <Pressable
-            onPress={() => handlePrivacySelection("account_deletion")}
-            style={[
-              styles.profileActionButton,
-              privacySelection === "account_deletion"
-                ? undefined
-                : styles.profileActionButtonGhost,
-            ]}
-          >
-            <Text
-              style={[
-                styles.profileActionText,
-                privacySelection === "account_deletion"
-                  ? undefined
-                  : styles.profileActionTextGhost,
-              ]}
-            >
-              Request account deletion
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => handlePrivacySelection("data_export")}
-            style={[
-              styles.profileActionButton,
-              privacySelection === "data_export"
-                ? undefined
-                : styles.profileActionButtonGhost,
-            ]}
-          >
-            <Text
-              style={[
-                styles.profileActionText,
-                privacySelection === "data_export"
-                  ? undefined
-                  : styles.profileActionTextGhost,
-              ]}
-            >
-              Request data export
-            </Text>
-          </Pressable>
-        </View>
+        <View style={[styles.profileHero, { minHeight: heroHeight }]}>
+          {accountProfile?.avatar_url ?? profile?.avatar_url ? (
+            <Image
+              resizeMode="cover"
+              source={{ uri: accountProfile?.avatar_url ?? profile?.avatar_url ?? "" }}
+              style={styles.ghostPortrait}
+            />
+          ) : null}
+          <View style={styles.ghostOverlay} />
 
-        {privacySelection ? (
-          <View style={styles.privacyConfirmCard}>
-            <Text style={styles.privacyConfirmTitle}>
-              Confirm {getPrivacyRequestLabel(privacySelection).toLowerCase()}
-            </Text>
-            <Text style={styles.privacyConfirmCopy}>
-              {privacySelection === "account_deletion"
-                ? "This creates a manual deletion request for your account and related Redress data. The actual deletion is not instant in the MVP app."
-                : "This creates a manual export request for the data currently associated with your Redress account. The export is not generated instantly in the MVP app."}
-            </Text>
-            <View style={styles.debugButtonRow}>
-              <Pressable
-                onPress={handleSubmitPrivacyRequest}
-                disabled={isSubmittingPrivacy}
-                style={[
-                  styles.debugButton,
-                  isSubmittingPrivacy ? styles.debugButtonDisabled : undefined,
-                ]}
-              >
-                <Text style={styles.debugButtonText}>
-                  {isSubmittingPrivacy ? "Submitting..." : "Confirm request"}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setPrivacySelection(null);
-                  setPrivacyStatus(null);
-                }}
-                style={[styles.debugButton, styles.profileActionButtonGhost]}
-              >
-                <Text style={[styles.debugButtonText, styles.profileActionTextGhost]}>
-                  Cancel
-                </Text>
-              </Pressable>
+          <View style={styles.avatarRing}>
+            <ProfileAvatar
+              avatarUrl={accountProfile?.avatar_url ?? profile?.avatar_url}
+              size={114}
+              username={resolvedUsername}
+            />
+          </View>
+
+          <Text style={styles.profileName}>{displayName}</Text>
+          <Text style={styles.profileHandle}>@{resolvedUsername}</Text>
+          <Text numberOfLines={2} style={styles.profileBio}>
+            {profileBio}
+          </Text>
+
+          <View style={styles.heroStatsRow}>
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatValue}>{formatCompactMetric(summary.totalCount)}</Text>
+              <Text style={styles.heroStatLabel}>Posts</Text>
+            </View>
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatValue}>
+                {formatCompactMetric(accountCounts?.followersCount ?? 0)}
+              </Text>
+              <Text style={styles.heroStatLabel}>Followers</Text>
+            </View>
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatValue}>
+                {formatCompactMetric(accountCounts?.followingCount ?? 0)}
+              </Text>
+              <Text style={styles.heroStatLabel}>Following</Text>
             </View>
           </View>
-        ) : null}
 
-        <View style={styles.privacyHistory}>
-          <Text style={styles.privacyLabel}>Recent requests</Text>
-          {privacyRequests.length === 0 ? (
-            <Text style={styles.privacyEmpty}>No privacy requests submitted yet.</Text>
-          ) : (
-            privacyRequests.map((request) => (
-              <View key={request.id} style={styles.privacyHistoryRow}>
-                <Text style={styles.privacyHistoryTitle}>
-                  {getPrivacyRequestLabel(request.request_type)}
+          <View style={styles.heroActionsRow}>
+            <GlassButton
+              disabled={isSavingProfile}
+              onPress={handleOpenEditProfile}
+              style={styles.editProfileButton}
+            >
+              <Text style={styles.editProfileButtonText}>
+                {isSavingProfile ? "Saving..." : "Edit Profile"}
+              </Text>
+            </GlassButton>
+          </View>
+        </View>
+
+        <View style={styles.gridDivider}>
+          <View style={styles.gridHandle} />
+        </View>
+
+        {isLoading ? (
+          <GlassCard style={styles.loadingCard}>
+            <ActivityIndicator color={theme.color.accentBright} />
+            <Text style={styles.loadingText}>Loading your profile…</Text>
+          </GlassCard>
+        ) : fits.length === 0 ? (
+          <GlassCard style={styles.emptyFitsCard}>
+            <Text style={styles.emptyFitsTitle}>No published fits yet</Text>
+            <Text style={styles.emptyFitsCopy}>
+              Use the new post button in the dock to upload your first fit.
+            </Text>
+          </GlassCard>
+        ) : (
+          <View style={styles.fitGrid}>
+            {fits.map((fit) => (
+              <ProfileGridTile
+                key={fit.id}
+                fit={fit}
+                onPress={() => {
+                  router.push(`/(app)?postId=${fit.id}`);
+                }}
+              />
+            ))}
+          </View>
+        )}
+
+        {statusMessage ? <Text style={styles.inlineStatus}>{statusMessage}</Text> : null}
+      </ScrollView>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={menuVisible}
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <Pressable style={styles.menuBackdrop} onPress={() => setMenuVisible(false)}>
+          <Pressable
+            style={[styles.menuPanel, { paddingBottom: Math.max(insets.bottom + 16, 24) }]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <View style={styles.menuHandle} />
+            <ScrollView
+              contentContainerStyle={styles.menuContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.menuHeader}>
+                <View>
+                  <Text style={chrome.eyebrow}>Menu</Text>
+                  <Text style={styles.menuTitle}>Account</Text>
+                </View>
+                <Pressable onPress={() => setMenuVisible(false)} style={styles.menuClose}>
+                  <Text style={styles.menuCloseText}>×</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.accountInfoCard}>
+                <Text style={styles.accountInfoLabel}>Signed in as</Text>
+                <Text style={styles.accountInfoValue}>{user?.email ?? "-"}</Text>
+                <Text style={styles.accountInfoHint}>
+                  Manage your public profile, sharing, and privacy requests here.
                 </Text>
-                <Text style={styles.privacyHistoryMeta}>
-                  {request.status} · {new Date(request.created_at).toLocaleString()}
-                </Text>
-                {request.details ? (
-                  <Text style={styles.privacyHistoryDetails}>{request.details}</Text>
+              </View>
+
+              <View style={styles.menuActionStack}>
+                {user?.id ? (
+                  <Link asChild href={`/(app)/profile/${user.id}`}>
+                    <Pressable style={styles.menuActionItem}>
+                      <View>
+                        <Text style={styles.menuActionTitle}>View public profile</Text>
+                        <Text style={styles.menuActionHint}>
+                          See how your profile appears to other people
+                        </Text>
+                      </View>
+                      <Text style={styles.menuActionChevron}>›</Text>
+                    </Pressable>
+                  </Link>
+                ) : null}
+
+                <Pressable
+                  onPress={() => void handleShareProfile()}
+                  style={styles.menuActionItem}
+                >
+                  <View>
+                    <Text style={styles.menuActionTitle}>Share profile</Text>
+                    <Text style={styles.menuActionHint}>
+                      Send your Redress profile to someone else
+                    </Text>
+                  </View>
+                  <Text style={styles.menuActionChevron}>›</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    setMenuVisible(false);
+                    setPrivacyModalVisible(true);
+                    setPrivacyStatus(null);
+                  }}
+                  style={styles.menuActionItem}
+                >
+                  <View>
+                    <Text style={styles.menuActionTitle}>Privacy & support</Text>
+                    <Text style={styles.menuActionHint}>
+                      Request data export or account deletion
+                    </Text>
+                  </View>
+                  <Text style={styles.menuActionChevron}>›</Text>
+                </Pressable>
+
+                {canReviewReports ? (
+                  <Link asChild href="/(app)/moderation/reports">
+                    <Pressable style={styles.menuActionItem}>
+                      <View>
+                        <Text style={styles.menuActionTitle}>Reports review</Text>
+                        <Text style={styles.menuActionHint}>
+                          Open the moderation queue for submitted reports
+                        </Text>
+                      </View>
+                      <Text style={styles.menuActionChevron}>›</Text>
+                    </Pressable>
+                  </Link>
                 ) : null}
               </View>
-            ))
-          )}
-        </View>
 
-        {privacyStatus ? <Text style={styles.status}>{privacyStatus}</Text> : null}
-      </View>
-
-      {DEV_SEED_ENABLED ? (
-        <View style={styles.debugCard}>
-          <Text style={styles.debugHeading}>Dev: seed database</Text>
-          <Text style={styles.debugHint}>
-            Open the seeding guide and use `supabase/seed.sql` from SQL Editor.
-          </Text>
-          <Link href="/(app)/dev-seed" style={styles.debugLink}>
-            Seed database instructions
-          </Link>
-        </View>
-      ) : null}
-
-      {__DEV__ ? (
-        <View style={styles.debugCard}>
-          <Text style={styles.debugHeading}>Dev: social debug</Text>
-          <Text style={styles.debugHint}>
-            Current user: @{displayUsername} · {user?.id ?? "-"}
-          </Text>
-
-          <Text style={styles.debugLabel}>Target username or profile id</Text>
-          <TextInput
-            autoCapitalize="none"
-            onChangeText={setSocialTargetInput}
-            placeholder="username or uuid"
-            placeholderTextColor={theme.color.inkSoft}
-            style={styles.debugInput}
-            value={socialTargetInput}
-          />
-
-          <View style={styles.debugButtonRow}>
-            <Pressable onPress={() => void resolveSocialTarget()} style={styles.debugButton}>
-              <Text style={styles.debugButtonText}>Load profile</Text>
-            </Pressable>
-            <Pressable
-              disabled={!socialTargetProfile || socialIsFollowing}
-              onPress={() => void handleFollow()}
-              style={[
-                styles.debugButton,
-                !socialTargetProfile || socialIsFollowing
-                  ? styles.debugButtonDisabled
-                  : undefined,
-              ]}
-            >
-              <Text style={styles.debugButtonText}>Follow</Text>
-            </Pressable>
-            <Pressable
-              disabled={!socialTargetProfile || !socialIsFollowing}
-              onPress={() => void handleUnfollow()}
-              style={[
-                styles.debugButton,
-                !socialTargetProfile || !socialIsFollowing
-                  ? styles.debugButtonDisabled
-                  : undefined,
-              ]}
-            >
-              <Text style={styles.debugButtonText}>Unfollow</Text>
-            </Pressable>
-          </View>
-
-          {socialTargetProfile ? (
-            <View style={styles.debugRow}>
-              <Text style={styles.debugValue}>id: {socialTargetProfile.id}</Text>
-              <Text style={styles.debugValue}>
-                username: @{socialTargetProfile.username}
-              </Text>
-              <Text style={styles.debugValue}>
-                followers: {socialCounts?.followersCount ?? 0}
-              </Text>
-              <Text style={styles.debugValue}>
-                following: {socialCounts?.followingCount ?? 0}
-              </Text>
-              <Text style={styles.debugValue}>
-                published posts: {socialTargetPosts}
-              </Text>
-              <Text style={styles.debugValue}>
-                current user follows: {socialIsFollowing ? "yes" : "no"}
-              </Text>
-            </View>
-          ) : null}
-
-          <Text style={styles.debugLabel}>Comments post id</Text>
-          <TextInput
-            autoCapitalize="none"
-            onChangeText={setSocialPostId}
-            placeholder="published post uuid"
-            placeholderTextColor={theme.color.inkSoft}
-            style={styles.debugInput}
-            value={socialPostId}
-          />
-
-          <Text style={styles.debugLabel}>Add comment</Text>
-          <TextInput
-            multiline
-            onChangeText={setSocialCommentText}
-            placeholder="Write a test comment"
-            placeholderTextColor={theme.color.inkSoft}
-            style={[styles.debugInput, styles.debugInputTall]}
-            textAlignVertical="top"
-            value={socialCommentText}
-          />
-
-          <View style={styles.debugButtonRow}>
-            <Pressable onPress={() => void handleLoadComments()} style={styles.debugButton}>
-              <Text style={styles.debugButtonText}>Load comments</Text>
-            </Pressable>
-            <Pressable onPress={() => void handleAddComment()} style={styles.debugButton}>
-              <Text style={styles.debugButtonText}>Add comment</Text>
-            </Pressable>
-          </View>
-
-          {socialComments.length === 0 ? (
-            <Text style={styles.debugEmpty}>No loaded comments yet.</Text>
-          ) : (
-            socialComments.map((comment) => (
-              <View key={comment.id} style={styles.debugRow}>
-                <Text style={styles.debugValue}>
-                  @{comment.user.username} · {comment.created_at}
+              <Pressable
+                disabled={isSubmitting}
+                onPress={handleSignOut}
+                style={[
+                  styles.signOutButton,
+                  isSubmitting ? styles.menuActionDisabled : undefined,
+                ]}
+              >
+                <Text style={styles.signOutButtonText}>
+                  {isSubmitting ? "Signing out..." : "Sign out"}
                 </Text>
-                <Text style={styles.debugValue}>post: {comment.post_id}</Text>
-                <Text style={styles.debugValue}>{comment.text}</Text>
+              </Pressable>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        animationType="slide"
+        transparent
+        visible={editProfileVisible}
+        onRequestClose={() => setEditProfileVisible(false)}
+      >
+        <Pressable style={styles.menuBackdrop} onPress={() => setEditProfileVisible(false)}>
+          <Pressable
+            style={[styles.sheetPanel, { paddingBottom: Math.max(insets.bottom + 20, 28) }]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <View style={styles.menuHandle} />
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={chrome.eyebrow}>Profile</Text>
+                <Text style={styles.menuTitle}>Edit profile</Text>
               </View>
-            ))
-          )}
+              <Pressable
+                onPress={() => setEditProfileVisible(false)}
+                style={styles.menuClose}
+              >
+                <Text style={styles.menuCloseText}>×</Text>
+              </Pressable>
+            </View>
 
-          {socialStatus ? <Text style={styles.status}>{socialStatus}</Text> : null}
-        </View>
-      ) : null}
+            <ScrollView
+              contentContainerStyle={styles.sheetContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.editProfilePreview}>
+                <View style={styles.editProfileAvatarWrap}>
+                  <ProfileAvatar
+                    avatarUrl={editProfileAvatarUri}
+                    size={112}
+                    username={resolvedUsername}
+                  />
+                </View>
+                <Pressable
+                  onPress={() => void handlePickProfilePhoto()}
+                  style={styles.profileActionButtonGhost}
+                >
+                  <Text style={styles.profileActionTextGhost}>Change photo</Text>
+                </Pressable>
+              </View>
 
-      {__DEV__ ? (
-        <View style={styles.debugCard}>
-          <Text style={styles.debugHeading}>Dev: recent outbound clicks</Text>
-          <Text style={styles.debugHint}>
-            Session-local debug list for this user. DB reads remain blocked by current RLS.
-          </Text>
-          {debugClicks.length === 0 ? (
-            <Text style={styles.debugEmpty}>No click logs captured in this session yet.</Text>
-          ) : (
-            debugClicks.map((entry) => (
-              <View key={`${entry.createdAt}-${entry.tagId}`} style={styles.debugRow}>
-                <Text style={styles.debugValue}>{entry.createdAt}</Text>
-                <Text style={styles.debugValue}>post: {entry.postId}</Text>
-                <Text style={styles.debugValue}>tag: {entry.tagId}</Text>
-                <Text style={styles.debugValue}>url: {entry.url}</Text>
-                <Text
+              <View style={styles.editSection}>
+                <Text style={styles.editLabel}>Description</Text>
+                <TextInput
+                  multiline
+                  maxLength={PROFILE_BIO_MAX_LENGTH}
+                  onChangeText={setEditProfileBio}
+                  placeholder="Tell people a little about your style"
+                  placeholderTextColor={theme.color.inkSoft}
+                  style={styles.editInput}
+                  textAlignVertical="top"
+                  value={editProfileBio}
+                />
+                <Text style={styles.editHint}>
+                  {editProfileBio.trim().length}/{PROFILE_BIO_MAX_LENGTH}
+                </Text>
+              </View>
+
+              {editProfileMessage ? <Text style={styles.status}>{editProfileMessage}</Text> : null}
+
+              <View style={styles.sheetActionsRow}>
+                <Pressable
+                  onPress={() => setEditProfileVisible(false)}
+                  style={[styles.profileActionButtonGhost, styles.sheetSecondaryButton]}
+                >
+                  <Text style={styles.profileActionTextGhost}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  disabled={isSavingProfile}
+                  onPress={() => void handleSaveProfile()}
                   style={[
-                    styles.debugValue,
-                    entry.error ? styles.debugError : styles.debugOk,
+                    styles.profileActionButton,
+                    styles.sheetPrimaryButton,
+                    isSavingProfile ? styles.menuActionDisabled : undefined,
                   ]}
                 >
-                  {entry.error ? `error: ${entry.error}` : "inserted"}
+                  <Text style={styles.profileActionText}>
+                    {isSavingProfile ? "Saving..." : "Save changes"}
+                  </Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        animationType="slide"
+        transparent
+        visible={privacyModalVisible}
+        onRequestClose={() => setPrivacyModalVisible(false)}
+      >
+        <Pressable style={styles.menuBackdrop} onPress={() => setPrivacyModalVisible(false)}>
+          <Pressable
+            style={[styles.sheetPanel, { paddingBottom: Math.max(insets.bottom + 20, 28) }]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <View style={styles.menuHandle} />
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={chrome.eyebrow}>Privacy</Text>
+                <Text style={styles.menuTitle}>Privacy & support</Text>
+              </View>
+              <Pressable
+                onPress={() => setPrivacyModalVisible(false)}
+                style={styles.menuClose}
+              >
+                <Text style={styles.menuCloseText}>×</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView
+              contentContainerStyle={styles.sheetContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.accountInfoCard}>
+                <Text style={styles.accountInfoValue}>Need help with your data?</Text>
+                <Text style={styles.accountInfoHint}>
+                  During beta, export and deletion requests are handled manually. Send the
+                  request here and it will be reviewed outside the app.
                 </Text>
               </View>
-            ))
-          )}
-        </View>
-      ) : null}
 
-      {__DEV__ ? (
-        <View style={styles.debugCard}>
-          <Text style={styles.debugHeading}>Dev: my reports</Text>
-          <Text style={styles.debugHint}>
-            Last 20 reports submitted by this user from the `reports` table.
-          </Text>
-          {debugReports.length === 0 ? (
-            <Text style={styles.debugEmpty}>No reports submitted yet.</Text>
-          ) : (
-            debugReports.map((report) => (
-              <View key={report.id} style={styles.debugRow}>
-                <Text style={styles.debugValue}>{report.created_at}</Text>
-                <Text style={styles.debugValue}>type: {report.target_type}</Text>
-                <Text style={styles.debugValue}>target: {report.target_id}</Text>
-                <Text style={styles.debugValue}>reason: {report.reason}</Text>
-                {report.details ? (
-                  <Text style={styles.debugValue}>details: {report.details}</Text>
-                ) : null}
+              <Text style={styles.editLabel}>Optional note</Text>
+              <TextInput
+                multiline
+                onChangeText={setPrivacyDetails}
+                placeholder="Add context if you want us to process this in a specific way"
+                placeholderTextColor={theme.color.inkSoft}
+                style={styles.editInput}
+                textAlignVertical="top"
+                value={privacyDetails}
+              />
+              <Text style={styles.editHint}>
+                {privacyDetails.trim().length}/{PRIVACY_REQUEST_DETAILS_MAX_LENGTH}
+              </Text>
+
+              <View style={styles.sheetActionStack}>
+                <Pressable
+                  onPress={() => handlePrivacySelection("data_export")}
+                  style={[
+                    styles.menuActionItem,
+                    privacySelection === "data_export"
+                      ? styles.menuActionItemActive
+                      : undefined,
+                  ]}
+                >
+                  <View>
+                    <Text style={styles.menuActionTitle}>Request data export</Text>
+                    <Text style={styles.menuActionHint}>
+                      Ask for a copy of the data linked to your account
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => handlePrivacySelection("account_deletion")}
+                  style={[
+                    styles.menuActionItem,
+                    privacySelection === "account_deletion"
+                      ? styles.menuActionItemActive
+                      : undefined,
+                  ]}
+                >
+                  <View>
+                    <Text style={styles.menuActionTitle}>Request account deletion</Text>
+                    <Text style={styles.menuActionHint}>
+                      Ask for removal of your Redress account and related data
+                    </Text>
+                  </View>
+                </Pressable>
               </View>
-            ))
-          )}
-        </View>
-      ) : null}
 
-      {statusMessage ? <Text style={styles.status}>{statusMessage}</Text> : null}
-    </ScrollView>
+              {privacySelection ? (
+                <View style={styles.confirmCard}>
+                  <Text style={styles.confirmTitle}>
+                    Confirm {getPrivacyRequestLabel(privacySelection).toLowerCase()}
+                  </Text>
+                  <Text style={styles.confirmCopy}>
+                    {privacySelection === "account_deletion"
+                      ? "This creates a manual request for account and related-data deletion. It is not instant in the beta."
+                      : "This creates a manual request for a copy of the data associated with your account. It is not generated instantly in the beta."}
+                  </Text>
+                  <Pressable
+                    disabled={isSubmittingPrivacy}
+                    onPress={() => void handleSubmitPrivacyRequest()}
+                    style={[
+                      styles.profileActionButton,
+                      styles.confirmButton,
+                      isSubmittingPrivacy ? styles.menuActionDisabled : undefined,
+                    ]}
+                  >
+                    <Text style={styles.profileActionText}>
+                      {isSubmittingPrivacy ? "Submitting..." : "Submit request"}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              <View style={styles.historySection}>
+                <Text style={styles.editLabel}>Recent requests</Text>
+                {privacyRequests.length === 0 ? (
+                  <Text style={styles.historyEmpty}>No privacy requests submitted yet.</Text>
+                ) : (
+                  privacyRequests.map((request) => (
+                    <View key={request.id} style={styles.historyRow}>
+                      <Text style={styles.historyTitle}>
+                        {getPrivacyRequestLabel(request.request_type)}
+                      </Text>
+                      <Text style={styles.historyMeta}>
+                        {request.status} · {new Date(request.created_at).toLocaleString()}
+                      </Text>
+                      {request.details ? (
+                        <Text style={styles.historyDetails}>{request.details}</Text>
+                      ) : null}
+                    </View>
+                  ))
+                )}
+              </View>
+
+              {privacyStatus ? <Text style={styles.status}>{privacyStatus}</Text> : null}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  avatarRing: {
+    alignItems: "center",
+    backgroundColor: "rgba(251, 247, 241, 0.6)",
+    borderColor: "rgba(188, 157, 126, 0.8)",
+    borderRadius: 999,
+    borderWidth: 4,
+    justifyContent: "center",
+    marginBottom: 12,
+    padding: 5,
+    shadowColor: "#9b7a63",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
+  },
   container: {
-    backgroundColor: theme.color.shell,
+    backgroundColor: "#f7f1e8",
     flexGrow: 1,
-    padding: 18,
-    paddingBottom: 120,
+    paddingHorizontal: 16,
+  },
+  debugButton: {
+    alignItems: "center",
+    backgroundColor: theme.color.accentBright,
+    borderRadius: theme.radius.pill,
+    flex: 1,
+    paddingVertical: 10,
+  },
+  debugButtonDisabled: {
+    opacity: 0.5,
+  },
+  debugButtonRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  debugButtonText: {
+    color: theme.color.white,
+    fontSize: 12,
+    fontWeight: "700",
   },
   debugCard: {
     backgroundColor: "rgba(255,249,243,0.92)",
@@ -900,25 +1052,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
-  debugButton: {
-    alignItems: "center",
-    backgroundColor: theme.color.accentBright,
-    borderRadius: theme.radius.pill,
-    flex: 1,
-    paddingVertical: 10,
-  },
-  debugButtonDisabled: {
-    opacity: 0.5,
-  },
-  debugButtonRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 10,
-  },
-  debugButtonText: {
-    color: theme.color.white,
+  debugHint: {
+    color: theme.color.muted,
     fontSize: 12,
-    fontWeight: "700",
+    marginTop: 4,
   },
   debugInput: {
     backgroundColor: "rgba(255,250,246,0.98)",
@@ -943,11 +1080,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     marginTop: 10,
-  },
-  debugHint: {
-    color: theme.color.muted,
-    fontSize: 12,
-    marginTop: 4,
   },
   debugOk: {
     color: theme.color.accentBright,
@@ -982,110 +1114,123 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: "700",
   },
-  fitCaption: {
-    color: theme.color.ink,
-    fontFamily: "serif",
-    fontSize: 22,
-    fontWeight: "700",
-    lineHeight: 28,
-    marginTop: 42,
+  fitGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "space-between",
   },
-  fitMeta: {
-    color: theme.color.inkSoft,
+  fitScorePill: {
+    backgroundColor: "rgba(246, 233, 219, 0.78)",
+    borderColor: "rgba(255,255,255,0.65)",
+    borderRadius: 15,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    position: "absolute",
+    right: 8,
+    top: 8,
+  },
+  fitScoreText: {
+    color: "#ca8b71",
+    fontFamily: Platform.select({ ios: "Avenir Next", default: undefined }),
     fontSize: 13,
-    marginTop: 10,
-  },
-  fitMetaOnDark: {
-    color: "rgba(255,255,255,0.72)",
-  },
-  fitRow: {
-    paddingBottom: 4,
-  },
-  fitStatus: {
-    color: theme.color.inkSoft,
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.4,
+    fontWeight: "600",
   },
   fitTile: {
-    backgroundColor: "rgba(232,221,208,0.92)",
-    borderColor: "rgba(216,206,194,0.7)",
-    borderRadius: 22,
-    borderWidth: 1,
-    height: 170,
-    marginRight: 14,
-    padding: 18,
-    width: 176,
+    borderRadius: 20,
+    height: 192,
+    overflow: "hidden",
+    position: "relative",
+    width: "31.8%",
   },
-  fitTileAccent: {
-    backgroundColor: "#b14a44",
+  fitTilePressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.985 }],
   },
-  fitTileInk: {
-    backgroundColor: "#7d6a5f",
+  fitTileImage: {
+    height: "100%",
+    width: "100%",
   },
-  fitTextOnDark: {
-    color: theme.color.white,
-  },
-  headerRow: {
+  gridDivider: {
     alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
+    borderTopColor: "rgba(210,178,148,0.62)",
+    borderTopWidth: 1,
     marginBottom: 16,
+    marginTop: 10,
+    paddingTop: 9,
+  },
+  gridHandle: {
+    backgroundColor: "rgba(222,203,181,0.95)",
+    borderRadius: 999,
+    height: 8,
+    width: 68,
   },
   headerActions: {
     alignItems: "center",
     flexDirection: "row",
     gap: 10,
   },
-  headerPill: {
+  headerTag: {
     alignItems: "center",
-    backgroundColor: "rgba(255,249,243,0.84)",
-    borderColor: "rgba(216,206,194,0.88)",
+    backgroundColor: "rgba(203, 180, 154, 0.54)",
+    borderColor: "rgba(255,255,255,0.20)",
     borderRadius: theme.radius.pill,
     borderWidth: 1,
     justifyContent: "center",
-    minWidth: 78,
+    minWidth: 88,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
-  headerPillText: {
-    color: theme.color.ink,
-    fontSize: 13,
+  headerTagText: {
+    color: theme.color.white,
+    fontSize: 12,
     fontWeight: "700",
   },
-  heading: {
-    color: theme.color.ink,
-    fontFamily: "serif",
+  heroActionsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 18,
+    width: "100%",
+  },
+  heroGlow: {
+    backgroundColor: "rgba(233, 214, 190, 0.44)",
+    borderRadius: 320,
+    height: 260,
+    position: "absolute",
+    width: 260,
+  },
+  heroGlowPrimary: {
+    left: -22,
+    top: 28,
+  },
+  heroGlowSecondary: {
+    opacity: 0.48,
+    right: -32,
+    top: 70,
+  },
+  heroStat: {
+    alignItems: "center",
+    flex: 1,
+  },
+  heroStatLabel: {
+    color: "#6e5648",
+    fontFamily: Platform.select({ ios: "Avenir Next", default: undefined }),
+    fontSize: 12,
+    fontWeight: "500",
+    lineHeight: 15,
+    marginTop: 3,
+  },
+  heroStatValue: {
+    color: "#5b4030",
+    fontFamily: Platform.select({ ios: "Georgia-Bold", default: "serif" }),
     fontSize: 28,
     fontWeight: "700",
   },
-  heroCard: {
-    backgroundColor: "rgba(232,221,208,0.82)",
-    borderColor: "rgba(216,206,194,0.88)",
-    borderRadius: 28,
-    borderWidth: 1,
+  heroStatsRow: {
     flexDirection: "row",
-    minHeight: 320,
-    overflow: "hidden",
-    padding: 22,
-  },
-  heroGlow: {
-    backgroundColor: "rgba(236, 221, 205, 0.62)",
-    borderRadius: 260,
-    height: 280,
-    position: "absolute",
-    right: -20,
-    top: 94,
-    width: 280,
-  },
-  heroSplit: {
-    backgroundColor: "rgba(255,255,255,0.16)",
-    height: "128%",
-    position: "absolute",
-    right: "42%",
-    top: -18,
-    transform: [{ rotate: "6deg" }],
-    width: 1,
+    marginTop: 16,
+    width: "100%",
   },
   infoCard: {
     backgroundColor: "rgba(255,249,243,0.86)",
@@ -1100,11 +1245,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 8,
   },
+  infoMetaPill: {
+    backgroundColor: "rgba(203, 180, 154, 0.16)",
+    borderColor: "rgba(203, 180, 154, 0.20)",
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  infoMetaPillText: {
+    color: theme.color.inkSoft,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  infoMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 14,
+  },
   infoValue: {
     color: theme.color.ink,
     fontSize: 15,
     fontWeight: "600",
     marginTop: 4,
+  },
+  inlineStatus: {
+    color: theme.color.inkSoft,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 18,
+    textAlign: "center",
   },
   loadingCard: {
     alignItems: "center",
@@ -1118,19 +1289,263 @@ const styles = StyleSheet.create({
     color: theme.color.inkSoft,
     marginTop: 10,
   },
-  monogramCopy: {
-    color: theme.color.inkSoft,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 14,
-    textAlign: "center",
-    width: 180,
-  },
-  monogramWrap: {
+  topBar: {
     alignItems: "center",
-    flex: 1,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginBottom: 10,
+    position: "relative",
+    zIndex: 3,
+  },
+  topBarActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  topBarButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,250,246,0.72)",
+    borderColor: "rgba(222,203,181,0.88)",
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
     justifyContent: "center",
-    paddingLeft: 12,
+    minHeight: 44,
+    minWidth: 88,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    shadowColor: "#9b7a63",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+  },
+  topBarButtonText: {
+    color: theme.color.inkSoft,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  topBarMenuButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,250,246,0.72)",
+    borderColor: "rgba(222,203,181,0.88)",
+    borderRadius: 22,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: "center",
+    shadowColor: "#9b7a63",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    width: 44,
+  },
+  topBarMenuText: {
+    color: theme.color.inkSoft,
+    fontSize: 22,
+    fontWeight: "400",
+    marginTop: -1,
+  },
+  accountInfoCard: {
+    backgroundColor: "rgba(255,249,243,0.88)",
+    borderColor: "rgba(216,206,194,0.88)",
+    borderRadius: 22,
+    borderWidth: 1,
+    marginTop: 18,
+    padding: 18,
+  },
+  accountInfoHint: {
+    color: theme.color.inkSoft,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 8,
+  },
+  accountInfoLabel: {
+    color: theme.color.inkSoft,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
+  accountInfoValue: {
+    color: theme.color.ink,
+    fontFamily: Platform.select({ ios: "Georgia-Bold", default: "serif" }),
+    fontSize: 22,
+    fontWeight: "700",
+    marginTop: 6,
+  },
+  confirmButton: {
+    marginTop: 14,
+  },
+  confirmCard: {
+    backgroundColor: "rgba(255,250,246,0.98)",
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    marginTop: 18,
+    padding: 16,
+  },
+  confirmCopy: {
+    color: theme.color.inkSoft,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 6,
+  },
+  confirmTitle: {
+    color: theme.color.ink,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  editHint: {
+    color: theme.color.muted,
+    fontSize: 12,
+    marginTop: 8,
+    textAlign: "right",
+  },
+  editInput: {
+    backgroundColor: "rgba(255,250,246,0.98)",
+    borderColor: theme.color.border,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    color: theme.color.ink,
+    marginTop: 8,
+    minHeight: 104,
+    padding: 14,
+  },
+  editLabel: {
+    color: theme.color.inkSoft,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
+  editProfileAvatarWrap: {
+    alignItems: "center",
+    backgroundColor: "rgba(251, 247, 241, 0.8)",
+    borderColor: "rgba(216,206,194,0.88)",
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: "center",
+    padding: 6,
+  },
+  editProfilePreview: {
+    alignItems: "center",
+    gap: 14,
+  },
+  editSection: {
+    marginTop: 20,
+  },
+  historyDetails: {
+    color: theme.color.inkSoft,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  historyEmpty: {
+    color: theme.color.muted,
+    marginTop: 8,
+  },
+  historyMeta: {
+    color: theme.color.muted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  historyRow: {
+    borderTopColor: theme.color.border,
+    borderTopWidth: 1,
+    marginTop: 10,
+    paddingTop: 10,
+  },
+  historySection: {
+    marginTop: 18,
+  },
+  historyTitle: {
+    color: theme.color.ink,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  menuBackdrop: {
+    backgroundColor: "rgba(20,14,11,0.28)",
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  menuClose: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  menuCloseText: {
+    color: theme.color.inkSoft,
+    fontSize: 28,
+    fontWeight: "300",
+  },
+  menuContent: {
+    paddingHorizontal: 18,
+    paddingTop: 4,
+  },
+  menuHandle: {
+    alignSelf: "center",
+    backgroundColor: "rgba(209,188,164,0.9)",
+    borderRadius: 999,
+    height: 6,
+    marginBottom: 14,
+    width: 72,
+  },
+  menuHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  menuPanel: {
+    backgroundColor: theme.color.shell,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: "82%",
+    paddingTop: 12,
+  },
+  menuActionChevron: {
+    color: "#b58f74",
+    fontSize: 24,
+    fontWeight: "300",
+  },
+  menuActionDisabled: {
+    opacity: 0.55,
+  },
+  menuActionHint: {
+    color: theme.color.inkSoft,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+    maxWidth: 250,
+  },
+  menuActionItem: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,249,243,0.9)",
+    borderColor: "rgba(216,206,194,0.88)",
+    borderRadius: 22,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 78,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+  },
+  menuActionItemActive: {
+    borderColor: "rgba(208, 156, 128, 0.92)",
+    borderWidth: 1.5,
+  },
+  menuActionStack: {
+    gap: 12,
+    marginTop: 18,
+  },
+  menuActionTitle: {
+    color: theme.color.ink,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  menuTitle: {
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 24,
+    fontWeight: "700",
+    marginTop: 4,
   },
   moderationLink: {
     alignItems: "center",
@@ -1146,94 +1561,60 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
-  privacyCard: {
+  sheetActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 18,
+  },
+  sheetActionStack: {
+    gap: 12,
+    marginTop: 18,
+  },
+  sheetContent: {
+    paddingHorizontal: 18,
+    paddingTop: 8,
+  },
+  sheetHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+  },
+  sheetPanel: {
+    backgroundColor: theme.color.shell,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: "88%",
+    paddingTop: 12,
+  },
+  sheetPrimaryButton: {
+    flex: 1,
+  },
+  sheetSecondaryButton: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  signOutButton: {
+    alignItems: "center",
     backgroundColor: "rgba(255,249,243,0.9)",
     borderColor: "rgba(216,206,194,0.88)",
-    borderRadius: 22,
+    borderRadius: theme.radius.pill,
     borderWidth: 1,
+    justifyContent: "center",
     marginTop: 18,
-    padding: 18,
+    minHeight: 50,
   },
-  privacyConfirmCard: {
-    backgroundColor: "rgba(255,250,246,0.98)",
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    marginTop: 14,
-    padding: 14,
-  },
-  privacyConfirmCopy: {
-    color: theme.color.inkSoft,
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 6,
-  },
-  privacyConfirmTitle: {
+  signOutButtonText: {
     color: theme.color.ink,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  privacyCopy: {
-    color: theme.color.inkSoft,
     fontSize: 14,
-    lineHeight: 21,
-    marginTop: 6,
-  },
-  privacyEmpty: {
-    color: theme.color.muted,
-    marginTop: 8,
-  },
-  privacyHeading: {
-    color: theme.color.ink,
-    fontFamily: "serif",
-    fontSize: 24,
     fontWeight: "700",
   },
-  privacyHint: {
-    color: theme.color.muted,
-    fontSize: 12,
-    marginTop: 6,
-    textAlign: "right",
-  },
-  privacyHistory: {
+  profileActionsRow: {
+    flexDirection: "row",
+    gap: 10,
     marginTop: 16,
-  },
-  privacyHistoryDetails: {
-    color: theme.color.inkSoft,
-    fontSize: 12,
-    marginTop: 4,
-  },
-  privacyHistoryMeta: {
-    color: theme.color.muted,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  privacyHistoryRow: {
-    borderTopColor: theme.color.border,
-    borderTopWidth: 1,
-    marginTop: 10,
-    paddingTop: 10,
-  },
-  privacyHistoryTitle: {
-    color: theme.color.ink,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  privacyInput: {
-    backgroundColor: "rgba(255,250,246,0.98)",
-    borderColor: theme.color.border,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    color: theme.color.ink,
-    marginTop: 6,
-    minHeight: 88,
-    padding: 12,
-  },
-  privacyLabel: {
-    color: theme.color.inkSoft,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 14,
   },
   profileActionButton: {
     alignItems: "center",
@@ -1257,71 +1638,73 @@ const styles = StyleSheet.create({
   profileActionTextGhost: {
     color: theme.color.ink,
   },
-  profileActionsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 16,
+  profileBio: {
+    color: "#6b5448",
+    fontFamily: Platform.select({ ios: "Avenir Next", default: undefined }),
+    fontSize: 13.5,
+    fontWeight: "500",
+    lineHeight: 19,
+    marginTop: 10,
+    maxWidth: 330,
+    textAlign: "center",
   },
-  sectionTitle: {
-    color: theme.color.ink,
-    fontFamily: "serif",
-    fontSize: 24,
+  profileHandle: {
+    color: "#c0a186",
+    fontFamily: Platform.select({ ios: "Avenir Next", default: undefined }),
+    fontSize: 18,
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  profileHero: {
+    alignItems: "center",
+    justifyContent: "flex-end",
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    paddingTop: 24,
+    position: "relative",
+  },
+  profileName: {
+    color: "#654636",
+    fontFamily: Platform.select({ ios: "Georgia-Bold", default: "serif" }),
+    fontSize: 33,
     fontWeight: "700",
-    marginBottom: 14,
-    marginTop: 24,
+    marginTop: 10,
+    textAlign: "center",
   },
-  settingsButton: {
+  ghostOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(247, 241, 232, 0.74)",
+  },
+  ghostPortrait: {
+    height: "128%",
+    left: "50%",
+    opacity: 0.12,
+    position: "absolute",
+    top: -18,
+    transform: [{ translateX: -170 }],
+    width: 340,
+  },
+  editProfileButton: {
     alignItems: "center",
-    backgroundColor: "rgba(255,249,243,0.84)",
-    borderColor: "rgba(216,206,194,0.88)",
-    borderRadius: 999,
-    borderWidth: 1,
-    height: 46,
-    justifyContent: "center",
-    width: 46,
-  },
-  settingsGlyph: {
-    color: theme.color.inkSoft,
-    fontSize: 24,
-  },
-  signOutButton: {
-    alignItems: "center",
-    backgroundColor: theme.color.accentBright,
+    backgroundColor: "rgba(255, 251, 247, 0.54)",
+    borderColor: "rgba(208, 156, 128, 0.92)",
     borderRadius: theme.radius.pill,
-    marginTop: 18,
-    paddingVertical: 13,
+    borderWidth: 1.8,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 58,
+    paddingHorizontal: 24,
+    shadowColor: "#b28669",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
   },
-  signOutText: {
-    color: theme.color.white,
+  editProfileButtonText: {
+    color: "#664636",
+    fontFamily: Platform.select({ ios: "Georgia-Bold", default: "serif" }),
+    fontSize: 18,
     fontWeight: "700",
-  },
-  statCard: {
-    backgroundColor: "rgba(255,249,243,0.76)",
-    borderColor: "rgba(216,206,194,0.7)",
-    borderRadius: 18,
-    borderWidth: 1,
-    marginBottom: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  statLabel: {
-    color: theme.color.inkSoft,
-    fontSize: 15,
-    marginTop: 4,
-  },
-  statValue: {
-    color: theme.color.ink,
-    fontFamily: "serif",
-    fontSize: 30,
-    fontWeight: "700",
-  },
-  statValueAccent: {
-    color: theme.color.accentBright,
-  },
-  statsColumn: {
-    paddingRight: 16,
-    width: 168,
-    zIndex: 1,
   },
   status: {
     color: theme.color.inkSoft,

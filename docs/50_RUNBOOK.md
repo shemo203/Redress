@@ -79,24 +79,28 @@ Quick check:
 Google is optional in Q3 completion; email/password auth is required.
 
 ## Storage Setup (Q4)
-Q4 upload uses a public Supabase Storage bucket named `videos`.
+The app now uses:
+- legacy bucket `videos` for older video uploads
+- bucket `media` for current photo and video uploads
 
 ### Via migration (recommended)
-1. Ensure the Q4 migration is present:
+1. Ensure these storage/media migrations are present:
    - `supabase/migrations/20260306000100_q4_storage_videos_bucket.sql`
+   - `supabase/migrations/20260423000600_media_posts_images.sql`
 2. Apply migrations:
    - `supabase db push`
 
-This migration:
-- creates bucket `videos` as public
-- allows public read from `videos`
-- allows authenticated users to insert/update/delete only within their own top-level folder prefix (`auth.uid()/...`)
+These migrations:
+- keep bucket `videos` available for older public video URLs
+- create bucket `media` as public
+- allow public read from the upload bucket
+- allow authenticated users to insert/update/delete only within their own top-level folder prefix (`auth.uid()/...`)
 
 ### Via Supabase Dashboard (manual fallback)
-1. Storage -> Create bucket -> name `videos`.
+1. Storage -> Create bucket -> name `media`.
 2. Mark bucket as `Public bucket`.
 3. Add object policies equivalent to migration:
-   - Public `SELECT` for bucket `videos`
+   - Public `SELECT` for bucket `media`
    - Authenticated `INSERT/UPDATE/DELETE` limited to objects whose first folder matches `auth.uid()`
 
 Upload path used by app:
@@ -176,6 +180,7 @@ select * from public.get_follow_counts('<profile-uuid>'::uuid);
 - Account screen should show user id, email, username, a `session loaded: yes/no` debug value, and support sign-out.
 - Sign-out should return to auth screens.
 - Upload screen should allow selecting a video, uploading to Storage, creating a `video_posts` draft row, and playing preview from stored URL.
+- Upload screen should allow selecting a single photo or video, uploading to Storage, creating a `video_posts` draft row with the correct `media_type`, and previewing the selected asset from the stored/public URL.
 
 ### Session persistence check
 1. Sign in with email/password.

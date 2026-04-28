@@ -44,9 +44,26 @@ src/
 - `analytics`: outbound click logging.
 - `reports`: user reporting flows.
 
-## Feed Query Strategy (Q7)
-- Main feed reads `video_posts` with `status='published'`, ordered by `created_at desc`.
-- Client pagination uses simple limit/offset (`range(from, to)` in Supabase JS).
+## Feed Query Strategy
+- Main feed now uses `public.rank_feed_posts(viewer_id, page_limit, exclude_post_ids)` instead of a plain `created_at desc` query.
+- Feed ranking is personalized for the signed-in viewer and prioritizes **new-to-user** posts using `post_impressions` as the MVP `seen_posts` concept.
+- Ranking logic (simple weighted MVP):
+  - strong unseen bonus if the viewer has never logged a `post_impression` for that post
+  - recency boost for newer published posts
+  - watch quality boost from `post_watches`:
+    - average `watch_ms`
+    - `completed` rate (MVP strong-watch proxy from the client)
+  - engagement boosts from:
+    - grade count
+    - `tag_reveals`
+    - `outbound_clicks`
+  - negative weight for post reports
+- Fallback behavior:
+  - while unseen posts exist, they appear first
+  - if the viewer has effectively seen everything unique, the client requests a recycle batch of ranked recent/seen posts so the swipe experience remains effectively endless
+- Pagination strategy:
+  - the client requests the next ranked batch while excluding already-loaded post ids
+  - this avoids offset bugs when ranking changes after a user sees more posts during the same session
 - Feed UI uses vertical paging (`FlatList` with one-post-per-screen behavior).
 - Authenticated app shell uses a floating three-circle dock:
   - center oversized Redress brand badge routes to feed
@@ -61,4 +78,7 @@ src/
 - Performance approach:
   - Keep list window small (`windowSize`, batch limits).
   - Mount video players only for active and nearby items (current ±1).
+- Analytics tie-in:
+  - `post_impressions` powers seen/unseen prioritization
+  - `post_watches` captures best-effort visible dwell time for ranking
 - Reveal items sheet reads tags already attached to each feed post row and opens only safe `http/https` links.

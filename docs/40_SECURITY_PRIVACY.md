@@ -4,12 +4,20 @@
 - Supabase Auth (email+password + Google)
 - Auth is required to use the app
 
+## Media uploads
+- Creators can upload a single photo post or a single video post.
+- Uploaded media is stored in the configured Supabase Storage bucket.
+- Older video uploads may still live in the legacy `videos` bucket.
+- New photo/video uploads use the `media` bucket.
+
 ## Link safety (mandatory)
 Reject creator-entered URLs that are:
 - not http/https
 - contain javascript:, data:, file:, blob:
 - are obviously malformed
-Optionally: maintain a blocked-domain list.
+Also maintain a domain safety foundation:
+- block local/private destinations (`localhost`, loopback, RFC1918 IPs, `.local`, `.internal`)
+- support optional env-configured allowlist/denylist rules for outbound domains
 
 ### Implemented URL validation rules (Q5 tag CRUD)
 For `clothing_tags.url`, the client validation now enforces:
@@ -24,6 +32,24 @@ For `clothing_tags.url`, the client validation now enforces:
 - Parse with URL parser; reject malformed values.
 - Accept only `http://` or `https://` protocol when a URL is present.
 - Save the trimmed normalized value only after all checks pass.
+- At open-time, re-check the destination hostname against the outbound domain policy before the browser is opened.
+
+### Premium outbound link UX
+- Tapping a linked clothing tag no longer opens the browser immediately.
+- The app first shows a preview card with:
+  - item name
+  - destination site/domain
+  - Open Graph or product-schema title/description/image where available
+  - product price where the destination exposes it in page metadata/schema
+  - an explicit `View on <site>` button that the user presses to open the browser
+- Preview metadata is fetched best-effort from the destination page HTML and cached briefly in memory on-device.
+- If preview fetching fails:
+  - the user still sees a fallback preview card
+  - the final browser open is still available unless the link is blocked by validation/domain policy
+- If the destination serves an anti-bot/blocked HTML page to the metadata fetcher:
+  - the app suppresses titles like `Access Denied`
+  - the preview falls back to safer generic copy instead of showing the block-page title as product metadata
+- Preview metadata is not written to the database in MVP.
 
 ## Abuse controls
 - One active grade row per user per post (unique + RPC-backed upsert)
@@ -88,7 +114,7 @@ For `clothing_tags.url`, the client validation now enforces:
 - Actual content takedown/suspension remains a manual operational step documented in the moderation runbook.
 
 ## Outbound click logging (Q9)
-- When a user taps a clothing tag link in the Reveal Items UI, the app attempts to insert a row into `outbound_clicks`.
+- When a user confirms `View on <site>` from the clothing-tag preview card, the app attempts to insert a row into `outbound_clicks`.
 - Stored fields:
   - `post_id`
   - `tag_id`
@@ -98,6 +124,11 @@ For `clothing_tags.url`, the client validation now enforces:
 - The same client URL validation is reused before open/log:
   - only `http://` and `https://`
   - reject unsafe schemes like `javascript:`, `data:`, `file:`, `blob:`
+- The same domain policy is reused before open/log:
+  - block local/private destinations
+  - support optional allowlist/denylist env configuration via:
+    - `EXPO_PUBLIC_OUTBOUND_DOMAIN_ALLOWLIST`
+    - `EXPO_PUBLIC_OUTBOUND_DOMAIN_DENYLIST`
 - Logging is best-effort:
   - if insert fails, the link still opens
   - in development, the client logs the insert failure to console for debugging
@@ -108,6 +139,7 @@ For `clothing_tags.url`, the client validation now enforces:
   - `app_opens`
   - `post_impressions`
   - `tag_reveals`
+  - `post_watches`
 - These events are best-effort:
   - inserts should never block the UI
   - in development, raw logging failures can be printed to console for debugging
@@ -116,13 +148,18 @@ For `clothing_tags.url`, the client validation now enforces:
   - `session_id`
   - `created_at`
   - plus `post_id` for post-level events
+  - plus `watch_ms` and `completed` for `post_watches`
 - Event semantics:
   - `app_open`: once per app start/session per signed-in user
   - `post_impression`: once per visible post per user per app session
   - `tag_reveal`: once per post per user per app session when the Reveal Items sheet opens
+  - `post_watch`: best-effort visible dwell-time event when the user spends meaningful time on a feed post
 - Access rules:
   - authenticated users can insert only their own analytics rows
   - there is no client read policy on these tables
+- Feed ranking uses these analytics:
+  - `post_impressions` to identify seen vs new-to-user posts
+  - `post_watches` as a lightweight watch-quality signal
 - The MVP still does not use ad-tech tracking or third-party advertising identifiers.
 
 ## Social foundation (Phase 1/2)

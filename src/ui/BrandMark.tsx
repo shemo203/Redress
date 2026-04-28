@@ -1,10 +1,11 @@
-import { Image, StyleSheet, View } from "react-native";
+import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { theme } from "../constants";
 
 const redressLogo = require("../../assets/redress-logo.png");
 
 type BrandMarkProps = {
+  badgeStyle?: StyleProp<ViewStyle>;
   compact?: boolean;
   elevated?: boolean;
   showLabel?: boolean;
@@ -14,6 +15,7 @@ type BrandMarkProps = {
 };
 
 export function BrandMark({
+  badgeStyle,
   compact = false,
   elevated = false,
   showWordmark = false,
@@ -28,6 +30,7 @@ export function BrandMark({
           variant === "chrome" ? styles.badgeChrome : undefined,
           compact ? styles.badgeCompact : undefined,
           elevated ? styles.badgeElevated : undefined,
+          badgeStyle,
           { height: size, width: size },
         ]}
       >

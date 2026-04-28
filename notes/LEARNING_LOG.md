@@ -622,3 +622,152 @@ Start in `supabase/migrations/20260423000300_reports_review_workflow.sql` for th
 
 ### If I need to debug this later: where to look first
 Start in `src/features/analytics/index.ts` for the insert/dedupe logic, then `app/(app)/_layout.tsx` and `app/(app)/index.tsx` for the trigger points, then `docs/70_KPI_QUERIES.md` to confirm the SQL still matches the schema.
+
+## Premium Outbound Link UX
+
+### What changed
+- Changed tagged-item links from direct-open to preview-first.
+- Added a preview card that tries to show Open Graph title, description, and image before the user opens the site.
+- Added a reusable outbound-domain policy layer plus a short in-memory cache for preview metadata.
+
+### Why we did it
+- This makes link taps feel more premium and intentional instead of abruptly jumping out to the browser.
+- It also gives us a safer place to re-check destination policy and keep the actual open clearly user-initiated.
+
+### Key files touched
+- `src/features/links/index.ts` — preview fetch, cache, OG parsing, and allowlist/denylist foundation.
+- `app/(app)/index.tsx` — Reveal Items now opens a preview card first, then `View on <site>` performs the browser open.
+- `docs/40_SECURITY_PRIVACY.md` — link-preview/privacy/safety behavior.
+- `docs/70_KPI_QUERIES.md` — CTR lift queries for before/after the preview UX launch.
+
+### Important concepts involved (explain simply)
+- Best-effort metadata fetch: the preview tries to read Open Graph tags from the destination page, but if the site blocks or omits them we still show a fallback card.
+- In-memory cache: repeated taps on the same link within a short window reuse the preview result instead of fetching again.
+- Domain policy foundation: even if the URL scheme is valid, we still block local/private destinations and leave room for future allowlist/denylist rules.
+
+### How to verify (step-by-step)
+1. Open Reveal Items on a post with a linked tag.
+2. Tap `Preview link`.
+3. Confirm a preview card appears before the browser opens.
+4. If the site exposes OG metadata, confirm title/description/image appear.
+5. Tap `View on <site>` and confirm the browser opens and outbound click logging still works.
+6. Tap the same link again and confirm the preview loads faster from cache.
+
+### Risks / follow-ups
+- OG metadata quality depends on the destination page HTML, so some links will only show fallback data.
+- The cache is session-memory only; it resets on app restart, which is fine for MVP.
+- If we later want stricter commerce control, the allowlist can become an enforced launch policy instead of just a foundation.
+
+### If I need to debug this later: where to look first
+Start in `src/features/links/index.ts` for validation/policy/cache behavior, then `app/(app)/index.tsx` for the preview-sheet state and button flow.
+
+## Image Upload Support For Posts
+
+### What changed
+- Added support for photo posts as well as video posts.
+- Added `media_type = 'image' | 'video'` to `video_posts` while keeping the same publish/tag rule.
+- Updated upload, draft, feed, and profile rendering so images display correctly instead of being treated like broken videos.
+
+### Why we did it
+- Creators needed a simpler way to post fits without always recording video.
+- The publish rules stay consistent, so image posts still need at least one clothing tag before they can be published.
+
+### Key files touched
+- `supabase/migrations/20260423000600_media_posts_images.sql` — adds `media_type`, creates the `media` bucket, and updates the ranked feed RPC.
+- `app/(app)/upload.tsx` — lets creators pick a single photo or video and stores the correct `media_type`.
+- `app/(app)/index.tsx` — renders image posts in the feed and comments preview.
+- `app/(app)/draft/[postId].tsx` — previews image drafts correctly.
+- `app/(app)/profile/[profileId].tsx` and `src/features/social/index.ts` — carry `media_type` through profile post loading and rendering.
+
+### Important concepts involved (explain simply)
+- Backward-compatible schema change: we kept the existing `video_url` column name, but it now stores the media asset URL for both images and videos.
+- Storage migration: older uploads can stay in `videos`, while new uploads go to `media`.
+- Media-aware rendering: the UI now branches on `media_type` so it uses `Image` for photos and `VideoView` for videos.
+
+### How to verify (step-by-step)
+1. Apply the new migration with `supabase db push`.
+2. Open the upload screen.
+3. Pick a photo, add at least one tag, and publish.
+4. Confirm a new `video_posts` row exists with `media_type = 'image'`.
+5. Confirm the image renders in feed and on the creator profile.
+6. Repeat with a video and confirm video posts still work.
+
+### Risks / follow-ups
+- The legacy column name `video_url` is a little misleading now; renaming to `media_url` would be cleaner later but is not required for MVP.
+- Profile currently renders real thumbnails for image posts and a simple placeholder for videos; if needed later, we can add video thumbnails too.
+
+### If I need to debug this later: where to look first
+Start in `supabase/migrations/20260423000600_media_posts_images.sql`, then `app/(app)/upload.tsx`, then `app/(app)/index.tsx` for the runtime render path.
+
+## UX Consistency Pass
+
+### What changed
+- Unified the beige/glass styling across the dock, upload flow, draft editor, public profile, and account hub.
+- Reworked upload and draft editing so they read as one guided flow with visible `Draft → Tags → Publish` progress.
+- Cleaned the public profile layout: clearer identity block, cleaner follow button placement, and a simple posts list instead of the older scattered grid.
+- Removed the playful settings emoji treatment from the account header and shifted it toward a cleaner list-style hub feel.
+
+### Why we did it
+- The app already had the right features, but the screens felt like they came from different design passes.
+- Making the compose and profile surfaces feel visually related reduces friction for early beta testers and makes the product feel more intentional.
+
+### Key files touched
+- `src/ui/chrome.ts` — shared beige/glass primitives for cards, buttons, typography, and inputs.
+- `src/ui/AppDock.tsx` — dock colors and spacing now match the feed overlays more closely.
+- `app/(app)/upload.tsx` — compact single-screen composer with clearer hierarchy and fixed action bar.
+- `app/(app)/draft/[postId].tsx` — matching draft editor styling and publish surface.
+- `app/(app)/profile/[profileId].tsx` — cleaner hero, follow CTA placement, and posts list.
+- `app/(app)/account.tsx` — lighter account-header cleanup and recent fits list styling.
+
+### Important concepts involved (explain simply)
+- Shared UI primitives: instead of restyling every screen separately, we created one small set of reusable design styles and applied them where the app felt inconsistent.
+- Visual hierarchy: we kept the same product logic, but made the order of information clearer so users see the next action faster.
+- UX polish vs feature work: no new backend or product rules were added here; this was mainly about reducing confusion and making existing flows feel smoother.
+
+### How to verify (step-by-step)
+1. Open the feed and check the bottom dock color against the feed overlay buttons.
+2. Open `New Post` and confirm the screen now reads top-to-bottom as `Draft`, `Tags`, `Publish`.
+3. Save a draft and reopen it; confirm the draft editor uses the same visual language as the upload screen.
+4. Open a public profile from the feed or search and confirm the follow button, stats, and post list are easier to scan.
+5. Open Account and confirm the header is cleaner and recent fits are shown as a simple list.
+
+### Risks / follow-ups
+- The upload and profile pages are more compact now, but very long tag/post collections will still require scrolling when content genuinely exceeds one screen.
+- We introduced a shared `chrome` style layer; if future screens drift visually, that file should be updated first rather than reintroducing one-off styles.
+
+### If I need to debug this later: where to look first
+Start in `src/ui/chrome.ts`, then check `app/(app)/upload.tsx`, `app/(app)/draft/[postId].tsx`, and `app/(app)/profile/[profileId].tsx` for screen-specific overrides.
+
+## Profile Reference Pass + Video Snapshots
+
+### What changed
+- Simplified the signed-in profile screen so the hero matches the beige reference more closely and moved the secondary account actions into a menu.
+- Replaced the small profile grid video placeholders with real thumbnail snapshots generated from the video itself.
+- Reused the same snapshot component on public profiles so video posts read consistently across profile surfaces.
+
+### Why we did it
+- The profile page was carrying too many utilities directly on the screen, which made the main identity/content view feel crowded.
+- Video tiles need a visible still frame; otherwise the profile grid does not communicate what each post is about.
+
+### Key files touched
+- `app/(app)/account.tsx` — cleaner hero proportions, menu shortcut button, and leaner on-screen content.
+- `src/ui/MediaSnapshot.tsx` — cached image/video thumbnail primitive using `expo-video-thumbnails`.
+- `app/(app)/profile/[profileId].tsx` — public profile post list now uses the same snapshot treatment.
+- `docs/00_INDEX.md` — updated route descriptions to reflect the new profile/menu/snapshot behavior.
+
+### Important concepts involved (explain simply)
+- Best-effort thumbnail generation: for videos we create a still image around the first second and cache it in memory so the same video is not reprocessed over and over in one session.
+- Overflow menu pattern: the profile screen keeps the identity and content visible, while secondary actions like privacy/debug/sign-out live one tap deeper.
+
+### How to verify (step-by-step)
+1. Open Account and confirm the screen is mostly hero + grid, with the smaller menu button beside `Edit Profile`.
+2. Open the menu and confirm the extra actions are there instead of cluttering the main screen.
+3. Check at least one video post on your profile and confirm the tile shows a visible still frame.
+4. Open another user profile and confirm video rows show snapshots there too.
+
+### Risks / follow-ups
+- Remote thumbnail generation is best-effort; if a video URL is slow or inaccessible, the tile falls back to a neutral placeholder.
+- We are caching in memory for now, not persisting posters to the database, so the first load of a video-heavy profile can still do some work.
+
+### If I need to debug this later: where to look first
+Start in `src/ui/MediaSnapshot.tsx`, then check how it is used from `app/(app)/account.tsx` and `app/(app)/profile/[profileId].tsx`.

@@ -1,9 +1,10 @@
-import { Link, useFocusEffect, useRouter } from "expo-router";
+import { Link, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -23,6 +24,7 @@ import { theme } from "../../src/constants";
 import {
   logPostImpressionBestEffort,
   logOutboundClickBestEffort,
+  logPostWatchBestEffort,
   logTagRevealBestEffort,
   shouldLogOutboundClick,
 } from "../../src/features/analytics";
@@ -34,6 +36,12 @@ import {
   listCommentsForPost,
   type SocialComment,
 } from "../../src/features/social";
+import {
+  buildOutboundLinkFallbackPreview,
+  fetchOutboundLinkPreview,
+  getOutboundLinkPolicy,
+  type OutboundLinkPreview,
+} from "../../src/features/links";
 import {
   buildLinkReportDetails,
   ReportComposer,
@@ -56,12 +64,36 @@ type FeedTag = {
 
 type FeedPost = {
   caption: string;
+  creator_avatar_url: string | null;
   created_at: string;
   creator_id: string;
   creator_username: string;
   id: string;
+  instanceKey: string;
+  media_type: "image" | "video";
   tags: FeedTag[];
   video_url: string;
+};
+
+type FeedPostSourceRow = {
+  caption: string | null;
+  created_at: string;
+  creator_id: string;
+  id: string;
+  media_type: "image" | "video";
+  video_url: string;
+};
+
+type RankedFeedPostRow = {
+  caption: FeedPostSourceRow["caption"];
+  created_at: FeedPostSourceRow["created_at"];
+  creator_id: FeedPostSourceRow["creator_id"];
+  id: FeedPostSourceRow["id"];
+  media_type: FeedPostSourceRow["media_type"];
+  published_at: string | null;
+  ranking_score: number;
+  seen_by_viewer: boolean;
+  video_url: FeedPostSourceRow["video_url"];
 };
 
 type ReportDraft = {
@@ -70,6 +102,12 @@ type ReportDraft = {
   targetId: string;
   targetType: ReportTargetType;
   title: string;
+};
+
+type LinkPreviewState = {
+  postId: string;
+  preview: OutboundLinkPreview;
+  tag: FeedTag;
 };
 
 type CommentsSheetProps = {
@@ -143,20 +181,22 @@ function FeedVideoCard({
   topInset,
   userGrade,
 }: FeedVideoCardProps) {
-  const player = useVideoPlayer(shouldMountVideo ? post.video_url : null, (videoPlayer) => {
-    videoPlayer.loop = true;
-  });
+  const player = useVideoPlayer(
+    shouldMountVideo && post.media_type === "video" ? post.video_url : null,
+    (videoPlayer) => {
+      videoPlayer.loop = true;
+    }
+  );
   const captionPreview = getCaptionPreview(post.caption);
   const captionText = captionExpanded
     ? post.caption.trim() || "Fresh fit, no caption yet."
     : captionPreview.text;
   const creatorLabel = post.creator_username.trim().toUpperCase();
-  const avatarFallback = post.creator_username.charAt(0).toUpperCase();
   const taggedItemCopy =
     post.tags.length === 1 ? "1 tagged item" : `${post.tags.length} tagged items`;
 
   useEffect(() => {
-    if (!shouldMountVideo) {
+    if (!shouldMountVideo || post.media_type !== "video") {
       return;
     }
     if (active) {
@@ -169,13 +209,17 @@ function FeedVideoCard({
   return (
     <View style={[styles.cardWrap, { height }]}>
       {shouldMountVideo ? (
-        <VideoView
-          player={player}
-          style={styles.video}
-          contentFit="cover"
-          nativeControls={false}
-          pointerEvents="none"
-        />
+        post.media_type === "image" ? (
+          <Image source={{ uri: post.video_url }} style={styles.video} resizeMode="cover" />
+        ) : (
+          <VideoView
+            player={player}
+            style={styles.video}
+            contentFit="cover"
+            nativeControls={false}
+            pointerEvents="none"
+          />
+        )
       ) : (
         <View style={[styles.video, styles.videoPlaceholder]}>
           <Text style={styles.placeholderText}>Loading…</Text>
@@ -187,7 +231,11 @@ function FeedVideoCard({
         <View style={styles.creatorCard}>
           <Pressable onPress={onOpenProfile} style={styles.creatorMainTap}>
             <View style={styles.creatorAvatar}>
-              <Text style={styles.creatorAvatarText}>{avatarFallback}</Text>
+              <ProfileAvatar
+                avatarUrl={post.creator_avatar_url}
+                size={48}
+                username={post.creator_username}
+              />
             </View>
             <View style={styles.creatorMeta}>
               <Text numberOfLines={1} style={styles.creatorName}>
@@ -226,9 +274,6 @@ function FeedVideoCard({
           </Text>
         </Pressable>
 
-        <Pressable onPress={onReportPost} style={styles.sideIconButton}>
-          <Text style={styles.sideIconButtonText}>Report</Text>
-        </Pressable>
       </View>
 
       <View style={styles.bottomOverlay}>
@@ -322,13 +367,16 @@ function CommentsSheet({
   visible,
 }: CommentsSheetProps) {
   const insets = useSafeAreaInsets();
-  const previewPlayer = useVideoPlayer(visible && post ? post.video_url : null, (player) => {
-    player.loop = true;
-  });
+  const previewPlayer = useVideoPlayer(
+    visible && post?.media_type === "video" ? post.video_url : null,
+    (player) => {
+      player.loop = true;
+    }
+  );
   const remainingCharacters = COMMENT_MAX_LENGTH - composerText.length;
 
   useEffect(() => {
-    if (!visible || !post) {
+    if (!visible || !post || post.media_type !== "video") {
       videoPlayerSafePause(previewPlayer);
       return;
     }
@@ -359,12 +407,20 @@ function CommentsSheet({
           <Pressable style={styles.commentsPreviewWrap} onPress={() => {}}>
             {post ? (
               <View style={styles.commentsPreviewCard}>
-                <VideoView
-                  player={previewPlayer}
-                  style={styles.commentsPreviewVideo}
-                  contentFit="cover"
-                  nativeControls={false}
-                />
+                {post.media_type === "image" ? (
+                  <Image
+                    source={{ uri: post.video_url }}
+                    style={styles.commentsPreviewVideo}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <VideoView
+                    player={previewPlayer}
+                    style={styles.commentsPreviewVideo}
+                    contentFit="cover"
+                    nativeControls={false}
+                  />
+                )}
                 <View style={styles.commentsPreviewTint} />
                 <View style={styles.commentsPreviewMeta}>
                   <Text style={styles.commentsPreviewUsername}>
@@ -496,13 +552,15 @@ function CommentsSheet({
 
 export default function FeedScreen() {
   const router = useRouter();
+  const { postId: requestedPostIdParam } = useLocalSearchParams<{ postId?: string }>();
   const { profile, user } = useAuth();
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const cardHeight = Math.max(height, 560);
+  const requestedPostId =
+    typeof requestedPostIdParam === "string" ? requestedPostIdParam : null;
 
   const [posts, setPosts] = useState<FeedPost[]>([]);
-  const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -511,6 +569,12 @@ export default function FeedScreen() {
 
   const [sheetVisible, setSheetVisible] = useState(false);
   const [sheetMessage, setSheetMessage] = useState<string | null>(null);
+  const [linkPreviewLoading, setLinkPreviewLoading] = useState(false);
+  const [linkPreviewMessage, setLinkPreviewMessage] = useState<string | null>(null);
+  const [linkPreviewState, setLinkPreviewState] = useState<LinkPreviewState | null>(
+    null
+  );
+  const [linkPreviewVisible, setLinkPreviewVisible] = useState(false);
   const [reportDraft, setReportDraft] = useState<ReportDraft | null>(null);
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -544,6 +608,11 @@ export default function FeedScreen() {
   const [commentsSubmitting, setCommentsSubmitting] = useState(false);
   const gradeCooldownUntilRef = useRef<Record<string, number>>({});
   const commentCooldownUntilRef = useRef<Record<string, number>>({});
+  const flatListRef = useRef<FlatList<FeedPost> | null>(null);
+  const linkPreviewRequestIdRef = useRef(0);
+  const requestedPostFetchRef = useRef<string | null>(null);
+  const requestedPostFocusedRef = useRef<string | null>(null);
+  const activeWatchRef = useRef<{ postId: string; startedAt: number } | null>(null);
 
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 80,
@@ -577,6 +646,143 @@ export default function FeedScreen() {
     setReportDraft(draft);
     setReportMessage(null);
   };
+
+  const focusFeedPostAtIndex = useCallback(
+    (index: number) => {
+      if (index < 0) {
+        return;
+      }
+      setActiveIndex(index);
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToIndex({
+          animated: false,
+          index,
+        });
+      });
+    },
+    []
+  );
+
+  const hydrateFeedPosts = useCallback(
+    async (rawPosts: FeedPostSourceRow[], batchSeed: string) => {
+      const postIds = rawPosts.map((post) => post.id);
+
+      let tagsByPostId = new Map<string, FeedTag[]>();
+      if (postIds.length > 0) {
+        const { data: tagsData, error: tagsError } = await supabase
+          .from("clothing_tags")
+          .select("id, post_id, name, brand, category, url")
+          .in("post_id", postIds);
+
+        if (tagsError) {
+          throw new Error(`Failed to load feed tags: ${tagsError.message}`);
+        }
+
+        tagsByPostId = (tagsData ?? []).reduce((map, tagRow) => {
+          const current = map.get(String(tagRow.post_id)) ?? [];
+          current.push({
+            brand: tagRow.brand,
+            category: tagRow.category,
+            id: tagRow.id,
+            name: tagRow.name,
+            url: tagRow.url,
+          });
+          map.set(String(tagRow.post_id), current);
+          return map;
+        }, new Map<string, FeedTag[]>());
+      }
+
+      const creatorIds = Array.from(new Set(rawPosts.map((post) => String(post.creator_id))));
+
+      let profileMap = new Map<
+        string,
+        {
+          avatar_url: string | null;
+          username: string;
+        }
+      >();
+      if (creatorIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url")
+          .in("id", creatorIds);
+
+        if (profilesError) {
+          throw new Error(`Failed to load feed profiles: ${profilesError.message}`);
+        }
+
+        profileMap = new Map(
+          (profilesData ?? []).map((creatorProfile) => [
+            creatorProfile.id,
+            {
+              avatar_url: creatorProfile.avatar_url ?? null,
+              username: creatorProfile.username,
+            },
+          ])
+        );
+      }
+
+      return rawPosts.map((post, index) => ({
+        caption: post.caption ?? "",
+        creator_avatar_url:
+          String(post.creator_id) === user?.id
+            ? profile?.avatar_url ?? profileMap.get(String(post.creator_id))?.avatar_url ?? null
+            : profileMap.get(String(post.creator_id))?.avatar_url ?? null,
+        created_at: post.created_at,
+        creator_id: String(post.creator_id),
+        creator_username:
+          (String(post.creator_id) === user?.id
+            ? profile?.username
+            : profileMap.get(String(post.creator_id))?.username) ??
+          String(post.creator_id).slice(0, 8),
+        id: post.id,
+        instanceKey: `${post.id}:${batchSeed}:${index}`,
+        media_type: post.media_type ?? "video",
+        tags: tagsByPostId.get(post.id) ?? [],
+        video_url: post.video_url,
+      })) satisfies FeedPost[];
+    },
+    [profile?.avatar_url, profile?.username, user?.id]
+  );
+
+  const fetchFeedPostById = useCallback(
+    async (postId: string) => {
+      const { data, error } = await supabase
+        .from("video_posts")
+        .select("id, caption, video_url, media_type, created_at, creator_id")
+        .eq("id", postId)
+        .eq("status", "published")
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(`Failed to load selected post: ${error.message}`);
+      }
+
+      if (!data) {
+        return null;
+      }
+
+      const batchSeed = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const [mappedPost] = await hydrateFeedPosts(
+        [data as FeedPostSourceRow],
+        batchSeed
+      );
+
+      return mappedPost ?? null;
+    },
+    [hydrateFeedPosts]
+  );
+
+  const closeLinkPreview = useCallback((options?: { reopenSheet?: boolean }) => {
+    linkPreviewRequestIdRef.current += 1;
+    setLinkPreviewLoading(false);
+    setLinkPreviewMessage(null);
+    setLinkPreviewState(null);
+    setLinkPreviewVisible(false);
+    if (options?.reopenSheet) {
+      setSheetVisible(true);
+    }
+  }, []);
 
   const refreshGradeStats = async (postIds: string[]) => {
     if (postIds.length === 0) {
@@ -684,7 +890,7 @@ export default function FeedScreen() {
     useCallback(() => {
       setIsFeedFocused(true);
       if (posts.length === 0 && !isLoading) {
-        void loadPosts(0, true);
+        void loadPosts(true);
       } else if (posts.length > 0) {
         void refreshCommentCounts(posts.map((post) => post.id));
       }
@@ -694,71 +900,80 @@ export default function FeedScreen() {
     }, [isLoading, posts])
   );
 
-  const loadPosts = async (nextOffset: number, reset: boolean) => {
-    if (isLoading) {
+  const loadPosts = async (reset: boolean) => {
+    if (isLoading || !user?.id) {
       return;
     }
 
     setIsLoading(true);
     setFeedMessage(null);
     try {
-      const rangeFrom = nextOffset;
-      const rangeTo = nextOffset + PAGE_SIZE - 1;
+      const fetchRankedPosts = async (excludePostIds: string[]) => {
+        const { data, error } = await supabase.rpc("rank_feed_posts", {
+          exclude_post_ids: excludePostIds,
+          page_limit: PAGE_SIZE,
+          viewer_id: user.id,
+        });
 
-      const { data: rawPosts, error: postsError } = await supabase
-        .from("video_posts")
-        .select(
-          "id, creator_id, caption, created_at, video_url, clothing_tags(id, name, brand, category, url)"
-        )
-        .eq("status", "published")
-        .order("created_at", { ascending: false })
-        .range(rangeFrom, rangeTo);
+        return {
+          error,
+          rows: (data ?? []) as RankedFeedPostRow[],
+        };
+      };
+
+      const excludePostIds = reset ? [] : posts.map((post) => post.id);
+      let recycleBatch = false;
+      let { error: postsError, rows: rawPosts } = await fetchRankedPosts(excludePostIds);
 
       if (postsError) {
         setFeedMessage(`Failed to load feed: ${postsError.message}`);
         return;
       }
 
-      const creatorIds = Array.from(
-        new Set((rawPosts ?? []).map((post) => String(post.creator_id)))
-      );
+      if (!reset && rawPosts.length === 0 && posts.length > 0) {
+        recycleBatch = true;
+        const recycleExcludeIds = activePost?.id ? [activePost.id] : [];
+        const recycleResult = await fetchRankedPosts(recycleExcludeIds);
+        postsError = recycleResult.error;
+        rawPosts = recycleResult.rows;
 
-      let usernameMap = new Map<string, string>();
-      if (creatorIds.length > 0) {
-        const { data: profilesData } = await supabase
-          .from("profiles")
-          .select("id, username")
-          .in("id", creatorIds);
-
-        usernameMap = new Map(
-          (profilesData ?? []).map((profile) => [profile.id, profile.username])
-        );
+        if (postsError) {
+          setFeedMessage(`Failed to load feed: ${postsError.message}`);
+          return;
+        }
       }
 
-      const mappedPosts: FeedPost[] = (rawPosts ?? []).map((post) => ({
-        caption: post.caption ?? "",
-        created_at: post.created_at,
-        creator_id: String(post.creator_id),
-        creator_username:
-          usernameMap.get(String(post.creator_id)) ?? String(post.creator_id).slice(0, 8),
-        id: post.id,
-        tags: (post.clothing_tags ?? []) as FeedTag[],
-        video_url: post.video_url,
-      }));
+      const batchSeed = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      let mappedPosts = await hydrateFeedPosts(rawPosts, batchSeed);
+
+      if (reset && requestedPostId && !mappedPosts.some((post) => post.id === requestedPostId)) {
+        try {
+          const focusedPost = await fetchFeedPostById(requestedPostId);
+          if (focusedPost) {
+            mappedPosts = [focusedPost, ...mappedPosts];
+          }
+        } catch (error) {
+          if (__DEV__) {
+            console.error("Failed to preload selected post", error);
+          }
+        }
+      }
 
       setPosts((current) => {
         if (reset) {
           return mappedPosts;
+        }
+        if (recycleBatch) {
+          return [...current, ...mappedPosts];
         }
         const known = new Set(current.map((post) => post.id));
         const deduped = mappedPosts.filter((post) => !known.has(post.id));
         return [...current, ...deduped];
       });
 
-      setOffset(nextOffset + mappedPosts.length);
-      setHasMore(mappedPosts.length === PAGE_SIZE);
+      setHasMore(mappedPosts.length > 0);
 
-      const knownIds = posts.map((post) => post.id);
+      const knownIds = reset ? [] : posts.map((post) => post.id);
       const mergedIds = Array.from(
         new Set(
           reset
@@ -779,8 +994,97 @@ export default function FeedScreen() {
   };
 
   useEffect(() => {
-    void loadPosts(0, true);
-  }, []);
+    if (!user?.id) {
+      return;
+    }
+    void loadPosts(true);
+  }, [requestedPostId, user?.id]);
+
+  useEffect(() => {
+    requestedPostFetchRef.current = null;
+    requestedPostFocusedRef.current = null;
+  }, [requestedPostId]);
+
+  useEffect(() => {
+    if (!requestedPostId || !user?.id) {
+      return;
+    }
+
+    const existingIndex = posts.findIndex((post) => post.id === requestedPostId);
+    if (existingIndex >= 0) {
+      if (requestedPostFocusedRef.current !== requestedPostId) {
+        requestedPostFocusedRef.current = requestedPostId;
+        focusFeedPostAtIndex(existingIndex);
+      }
+      return;
+    }
+
+    if (isLoading || requestedPostFetchRef.current === requestedPostId) {
+      return;
+    }
+
+    requestedPostFetchRef.current = requestedPostId;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const focusedPost = await fetchFeedPostById(requestedPostId);
+        if (cancelled) {
+          return;
+        }
+
+        if (!focusedPost) {
+          setFeedMessage("That post is no longer available.");
+          return;
+        }
+
+        setPosts((current) =>
+          current.some((post) => post.id === focusedPost.id)
+            ? current
+            : [focusedPost, ...current]
+        );
+        setHasMore(true);
+        requestedPostFocusedRef.current = requestedPostId;
+        focusFeedPostAtIndex(0);
+        await refreshGradeStats([focusedPost.id]);
+        await refreshCommentCounts([focusedPost.id]);
+      } catch (error) {
+        if (__DEV__) {
+          console.error("Failed to open selected post in feed", error);
+        }
+        setFeedMessage(getRequestFailureMessage(error, "Could not open that post"));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    fetchFeedPostById,
+    focusFeedPostAtIndex,
+    isLoading,
+    posts,
+    requestedPostId,
+    user?.id,
+  ]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    setPosts((current) =>
+      current.map((post) =>
+        post.creator_id === user.id
+          ? {
+              ...post,
+              creator_avatar_url: profile?.avatar_url ?? post.creator_avatar_url,
+              creator_username: profile?.username ?? post.creator_username,
+            }
+          : post
+      )
+    );
+  }, [profile?.avatar_url, profile?.username, user?.id]);
 
   useEffect(() => {
     if (!isFeedFocused || !activePost?.id || !user?.id) {
@@ -796,6 +1100,74 @@ export default function FeedScreen() {
       }
     });
   }, [activePost?.id, isFeedFocused, user?.id]);
+
+  useEffect(() => {
+    const canTrackWatch =
+      Boolean(user?.id) &&
+      isFeedFocused &&
+      !commentsSheetVisible &&
+      !gradeSheetVisible &&
+      !sheetVisible &&
+      !linkPreviewVisible;
+    const nextPostId = canTrackWatch ? activePost?.id ?? null : null;
+    const now = Date.now();
+    const currentWatch = activeWatchRef.current;
+
+    if (currentWatch && currentWatch.postId !== nextPostId && user?.id) {
+      const watchMs = now - currentWatch.startedAt;
+      const completed = watchMs >= 15000;
+      void logPostWatchBestEffort({
+        completed,
+        postId: currentWatch.postId,
+        userId: user.id,
+        watchMs,
+      }).then((result) => {
+        if (__DEV__ && result.error) {
+          console.error("Failed to log post watch", result.error);
+        }
+      });
+      activeWatchRef.current = null;
+    }
+
+    if (nextPostId && user?.id) {
+      if (!currentWatch || currentWatch.postId !== nextPostId) {
+        activeWatchRef.current = {
+          postId: nextPostId,
+          startedAt: now,
+        };
+      }
+      return;
+    }
+
+    activeWatchRef.current = null;
+  }, [
+    activePost?.id,
+    commentsSheetVisible,
+    gradeSheetVisible,
+    isFeedFocused,
+    linkPreviewVisible,
+    sheetVisible,
+    user?.id,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      const currentWatch = activeWatchRef.current;
+      if (!currentWatch || !user?.id) {
+        return;
+      }
+
+      const watchMs = Date.now() - currentWatch.startedAt;
+      const completed = watchMs >= 15000;
+      void logPostWatchBestEffort({
+        completed,
+        postId: currentWatch.postId,
+        userId: user.id,
+        watchMs,
+      });
+      activeWatchRef.current = null;
+    };
+  }, [user?.id]);
 
   const insertGradeDirect = async (postId: string, value: number) => {
     return supabase.from("grades").insert({
@@ -970,6 +1342,7 @@ export default function FeedScreen() {
 
   const openRevealSheet = () => {
     setSheetMessage(null);
+    closeLinkPreview();
     setSheetVisible(true);
 
     if (user?.id && activePost?.id) {
@@ -1149,14 +1522,69 @@ export default function FeedScreen() {
       return;
     }
 
-    const normalizedUrl = validation.normalized;
-    const postId = activePost?.id;
+    const policy = getOutboundLinkPolicy(validation.normalized);
+    if (!policy.allowed) {
+      setSheetMessage(policy.reason ?? "Blocked unsafe link.");
+      return;
+    }
 
-    if (user?.id && postId && shouldLogOutboundClick(tag.id)) {
+    const postId = activePost?.id;
+    if (!postId) {
+      setSheetMessage("No post selected.");
+      return;
+    }
+
+    const requestId = linkPreviewRequestIdRef.current + 1;
+    linkPreviewRequestIdRef.current = requestId;
+    setSheetMessage(null);
+    setLinkPreviewLoading(true);
+    setLinkPreviewMessage(null);
+    setLinkPreviewState({
+      postId,
+      preview: buildOutboundLinkFallbackPreview(validation.normalized),
+      tag,
+    });
+    setSheetVisible(false);
+    setLinkPreviewVisible(true);
+
+    const preview = await fetchOutboundLinkPreview(validation.normalized);
+    if (linkPreviewRequestIdRef.current !== requestId) {
+      return;
+    }
+
+    setLinkPreviewState({
+      postId,
+      preview,
+      tag,
+    });
+    setLinkPreviewMessage(preview.blockedReason ?? preview.warning);
+    setLinkPreviewLoading(false);
+  };
+
+  const openPreviewDestination = async () => {
+    if (!linkPreviewState) {
+      return;
+    }
+
+    const validation = validateClothingTagUrl(linkPreviewState.preview.finalUrl, {
+      requireUrl: true,
+    });
+    if (!validation.valid) {
+      setLinkPreviewMessage(validation.error ?? "Blocked unsafe link.");
+      return;
+    }
+
+    const policy = getOutboundLinkPolicy(validation.normalized);
+    if (!policy.allowed) {
+      setLinkPreviewMessage(policy.reason ?? "Blocked unsafe link.");
+      return;
+    }
+
+    if (user?.id && shouldLogOutboundClick(linkPreviewState.tag.id)) {
       void logOutboundClickBestEffort({
-        postId,
-        tagId: tag.id,
-        url: normalizedUrl,
+        postId: linkPreviewState.postId,
+        tagId: linkPreviewState.tag.id,
+        url: validation.normalized,
         userId: user.id,
       }).then((result) => {
         if (__DEV__ && result.error) {
@@ -1166,11 +1594,12 @@ export default function FeedScreen() {
     }
 
     try {
-      await WebBrowser.openBrowserAsync(normalizedUrl);
+      await WebBrowser.openBrowserAsync(validation.normalized);
+      closeLinkPreview();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to open link.";
-      setSheetMessage(message);
+      setLinkPreviewMessage(message);
     }
   };
 
@@ -1215,8 +1644,22 @@ export default function FeedScreen() {
       ) : null}
 
       <FlatList
+        ref={flatListRef}
         data={posts}
-        keyExtractor={(item) => item.id}
+        getItemLayout={(_, index) => ({
+          index,
+          length: cardHeight,
+          offset: cardHeight * index,
+        })}
+        keyExtractor={(item) => item.instanceKey}
+        onScrollToIndexFailed={({ index }) => {
+          requestAnimationFrame(() => {
+            flatListRef.current?.scrollToIndex({
+              animated: false,
+              index,
+            });
+          });
+        }}
         renderItem={({ item, index }) => {
           const stats = gradeStatsByPost[item.id];
           return (
@@ -1268,16 +1711,11 @@ export default function FeedScreen() {
         pagingEnabled
         snapToAlignment="start"
         decelerationRate="fast"
-        getItemLayout={(_, index) => ({
-          length: cardHeight,
-          offset: cardHeight * index,
-          index,
-        })}
         onEndReached={() => {
           if (!hasMore || isLoading) {
             return;
           }
-          void loadPosts(offset, false);
+          void loadPosts(false);
         }}
         onEndReachedThreshold={0.5}
         onViewableItemsChanged={onViewableItemsChanged}
@@ -1373,11 +1811,17 @@ export default function FeedScreen() {
         visible={sheetVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setSheetVisible(false)}
+        onRequestClose={() => {
+          closeLinkPreview();
+          setSheetVisible(false);
+        }}
       >
         <Pressable
           style={styles.sheetBackdrop}
-          onPress={() => setSheetVisible(false)}
+          onPress={() => {
+            closeLinkPreview();
+            setSheetVisible(false);
+          }}
         >
           <Pressable style={styles.sheetPanel} onPress={() => {}}>
             <Text style={styles.sheetTitle}>Reveal items</Text>
@@ -1395,14 +1839,24 @@ export default function FeedScreen() {
                   requireUrl: false,
                 });
                 const hasLink = link.present;
-                const disabled = !hasLink || !link.valid;
+                const domainPolicy = link.valid
+                  ? getOutboundLinkPolicy(link.normalized)
+                  : null;
+                const statusCopy = !hasLink
+                  ? "This tag does not have an outbound link yet."
+                  : !link.valid
+                    ? "Only valid http:// or https:// links can be previewed."
+                    : domainPolicy && !domainPolicy.allowed
+                      ? domainPolicy.reason ?? "This destination is blocked."
+                      : null;
+                const blockedLink = statusCopy != null;
 
                 return (
                   <View
                     key={tag.id}
                     style={[
                       styles.tagRow,
-                      disabled ? styles.tagRowDisabled : undefined,
+                      !hasLink ? styles.tagRowDisabled : undefined,
                     ]}
                   >
                     <Text style={styles.tagName}>{tag.name}</Text>
@@ -1415,7 +1869,6 @@ export default function FeedScreen() {
                     </Text>
                     <View style={styles.tagActionRow}>
                       <Pressable
-                        disabled={disabled}
                         onPress={() => {
                           if (!hasLink) {
                             setSheetMessage("This tag does not have an outbound link.");
@@ -1425,11 +1878,15 @@ export default function FeedScreen() {
                             setSheetMessage("Blocked unsafe link.");
                             return;
                           }
+                          if (domainPolicy && !domainPolicy.allowed) {
+                            setSheetMessage(domainPolicy.reason ?? "Blocked unsafe link.");
+                            return;
+                          }
                           void openTagLink(tag);
                         }}
                         style={[
                           styles.tagOpenButton,
-                          disabled ? styles.tagOpenButtonDisabled : undefined,
+                          blockedLink ? styles.tagOpenButtonBlocked : undefined,
                         ]}
                       >
                         <Text style={styles.tagOpenText}>
@@ -1437,7 +1894,9 @@ export default function FeedScreen() {
                             ? "No link"
                             : !link.valid
                               ? "Unsafe link blocked"
-                              : "Open link"}
+                              : domainPolicy && !domainPolicy.allowed
+                                ? "Blocked domain"
+                                : "Preview link"}
                         </Text>
                       </Pressable>
                       {hasLink ? (
@@ -1457,10 +1916,103 @@ export default function FeedScreen() {
                         </Pressable>
                       ) : null}
                     </View>
+                    {statusCopy ? (
+                      <Text style={styles.tagStatusText}>{statusCopy}</Text>
+                    ) : null}
                   </View>
                 );
               })
             )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={linkPreviewVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => closeLinkPreview({ reopenSheet: true })}
+      >
+        <Pressable
+          style={styles.linkPreviewBackdrop}
+          onPress={() => closeLinkPreview({ reopenSheet: true })}
+        >
+          <Pressable style={styles.linkPreviewCard} onPress={() => {}}>
+            <View style={styles.linkPreviewHandle} />
+            <Text style={styles.linkPreviewEyebrow}>Link preview</Text>
+
+            {linkPreviewState?.preview.imageUrl ? (
+              <Image
+                source={{ uri: linkPreviewState.preview.imageUrl }}
+                style={styles.linkPreviewImage}
+              />
+            ) : (
+              <View style={styles.linkPreviewImageFallback}>
+                <Text style={styles.linkPreviewImageFallbackText}>
+                  {linkPreviewState?.preview.siteLabel ?? "Site"}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.linkPreviewHeaderRow}>
+              <View style={styles.linkPreviewHeaderText}>
+                <Text numberOfLines={1} style={styles.linkPreviewTagName}>
+                  {linkPreviewState?.tag.name ?? "Tagged item"}
+                </Text>
+                <Text numberOfLines={2} style={styles.linkPreviewTitle}>
+                  {linkPreviewState?.preview.title ?? "Open site"}
+                </Text>
+              </View>
+              {linkPreviewLoading ? (
+                <ActivityIndicator color={theme.color.accentBright} size="small" />
+              ) : null}
+            </View>
+
+            <Text numberOfLines={1} style={styles.linkPreviewDomain}>
+              {linkPreviewState?.preview.hostname ?? ""}
+            </Text>
+
+            {linkPreviewState?.preview.price ? (
+              <View style={styles.linkPreviewPricePill}>
+                <Text style={styles.linkPreviewPriceText}>
+                  {linkPreviewState.preview.price}
+                </Text>
+              </View>
+            ) : null}
+
+            <Text numberOfLines={3} style={styles.linkPreviewDescription}>
+              {linkPreviewState?.preview.description ??
+                "We’ll open this item in your browser. Metadata is fetched best-effort from the destination site."}
+            </Text>
+
+            {linkPreviewMessage ? (
+              <Text style={styles.linkPreviewMessage}>{linkPreviewMessage}</Text>
+            ) : null}
+
+            <View style={styles.linkPreviewActionRow}>
+              <Pressable
+                onPress={() => closeLinkPreview({ reopenSheet: true })}
+                style={styles.linkPreviewSecondaryButton}
+              >
+                <Text style={styles.linkPreviewSecondaryText}>Back</Text>
+              </Pressable>
+              <Pressable
+                disabled={Boolean(linkPreviewState?.preview.blockedReason)}
+                onPress={() => {
+                  void openPreviewDestination();
+                }}
+                style={[
+                  styles.linkPreviewPrimaryButton,
+                  linkPreviewState?.preview.blockedReason
+                    ? styles.linkPreviewPrimaryButtonDisabled
+                    : undefined,
+                ]}
+              >
+                <Text style={styles.linkPreviewPrimaryText}>
+                  View on {linkPreviewState?.preview.siteLabel ?? "site"}
+                </Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1716,19 +2268,10 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   creatorAvatar: {
-    alignItems: "center",
-    backgroundColor: "#cfb896",
-    borderColor: "rgba(255,255,255,0.88)",
     borderRadius: 999,
-    borderWidth: 2,
     height: 48,
-    justifyContent: "center",
+    overflow: "hidden",
     width: 48,
-  },
-  creatorAvatarText: {
-    color: theme.color.white,
-    fontSize: 20,
-    fontWeight: "800",
   },
   creatorButton: {
     alignSelf: "flex-start",
@@ -1866,6 +2409,149 @@ const styles = StyleSheet.create({
   placeholderText: {
     color: theme.color.shell,
     fontSize: 16,
+  },
+  linkPreviewActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 18,
+  },
+  linkPreviewBackdrop: {
+    alignItems: "center",
+    backgroundColor: "rgba(20,12,8,0.48)",
+    flex: 1,
+    justifyContent: "flex-end",
+    padding: 18,
+  },
+  linkPreviewCard: {
+    backgroundColor: "rgba(255,250,246,0.98)",
+    borderColor: "rgba(221,208,194,0.92)",
+    borderRadius: 26,
+    borderWidth: 1,
+    maxWidth: 460,
+    padding: 18,
+    width: "100%",
+  },
+  linkPreviewDescription: {
+    color: theme.color.inkSoft,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 10,
+  },
+  linkPreviewDomain: {
+    color: theme.color.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 6,
+  },
+  linkPreviewEyebrow: {
+    color: theme.color.accentBright,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  linkPreviewHandle: {
+    alignSelf: "center",
+    backgroundColor: "rgba(173,150,127,0.34)",
+    borderRadius: theme.radius.pill,
+    height: 4,
+    marginBottom: 12,
+    width: 42,
+  },
+  linkPreviewHeaderRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+    marginTop: 14,
+  },
+  linkPreviewHeaderText: {
+    flex: 1,
+  },
+  linkPreviewImage: {
+    backgroundColor: "rgba(233,226,218,0.8)",
+    borderRadius: 18,
+    height: 168,
+    marginTop: 10,
+    width: "100%",
+  },
+  linkPreviewImageFallback: {
+    alignItems: "center",
+    backgroundColor: "rgba(215,198,178,0.72)",
+    borderRadius: 18,
+    height: 168,
+    justifyContent: "center",
+    marginTop: 10,
+    width: "100%",
+  },
+  linkPreviewImageFallbackText: {
+    color: theme.color.white,
+    fontFamily: "serif",
+    fontSize: 28,
+    fontWeight: "700",
+  },
+  linkPreviewMessage: {
+    color: theme.color.accentBright,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 12,
+  },
+  linkPreviewPrimaryButton: {
+    alignItems: "center",
+    backgroundColor: theme.color.accentBright,
+    borderRadius: theme.radius.pill,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 14,
+  },
+  linkPreviewPrimaryButtonDisabled: {
+    backgroundColor: "rgba(234,47,35,0.30)",
+  },
+  linkPreviewPrimaryText: {
+    color: theme.color.white,
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  linkPreviewPricePill: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(234,47,35,0.10)",
+    borderRadius: theme.radius.pill,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  linkPreviewPriceText: {
+    color: theme.color.accentBright,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  linkPreviewSecondaryButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(233,223,212,0.72)",
+    borderRadius: theme.radius.pill,
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 16,
+  },
+  linkPreviewSecondaryText: {
+    color: theme.color.inkSoft,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  linkPreviewTagName: {
+    color: theme.color.accentBright,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  linkPreviewTitle: {
+    color: theme.color.ink,
+    fontFamily: "serif",
+    fontSize: 24,
+    fontWeight: "700",
+    lineHeight: 28,
+    marginTop: 4,
   },
   scoreCard: {
     alignItems: "center",
@@ -2032,6 +2718,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
+  tagOpenButtonBlocked: {
+    backgroundColor: "rgba(234,47,35,0.16)",
+  },
   tagOpenButtonDisabled: {
     opacity: 0.55,
   },
@@ -2064,6 +2753,12 @@ const styles = StyleSheet.create({
   },
   tagRowDisabled: {
     opacity: 0.55,
+  },
+  tagStatusText: {
+    color: theme.color.accentBright,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 8,
   },
   video: {
     height: "100%",

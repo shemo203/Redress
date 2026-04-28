@@ -38,7 +38,7 @@ export function AppDock() {
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.dockWrap, { paddingBottom: Math.max(insets.bottom - 10, 0) }]}
+      style={[styles.dockWrap, { paddingBottom: Math.max(insets.bottom - 6, 2) }]}
     >
       <View style={styles.row}>
         <Pressable
@@ -58,7 +58,13 @@ export function AppDock() {
           onPress={() => router.replace("/(app)")}
           style={styles.centerItem}
         >
-          <BrandMark elevated showWordmark size={114} variant="chrome" />
+          <BrandMark
+            badgeStyle={styles.centerBadge}
+            elevated
+            showWordmark
+            size={114}
+            variant="chrome"
+          />
         </Pressable>
 
         <Pressable
@@ -91,7 +97,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     minWidth: 124,
-    transform: [{ translateY: 58 }],
+    transform: [{ translateY: 52 }],
+  },
+  centerBadge: {
+    backgroundColor: "rgba(203, 180, 154, 0.54)",
+    borderColor: "rgba(255,255,255,0.20)",
   },
   dockWrap: {
     bottom: 0,
@@ -109,7 +119,7 @@ const styles = StyleSheet.create({
     color: theme.color.accentBright,
   },
   leftSideCircle: {
-    transform: [{ translateX: -10 }, { translateY: 34 }],
+    transform: [{ translateX: 2 }, { translateY: 28 }],
   },
   profileBody: {
     borderRadius: 999,
@@ -136,20 +146,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   rightSideCircle: {
-    transform: [{ translateX: 10 }, { translateY: 34 }],
+    transform: [{ translateX: -2 }, { translateY: 28 }],
   },
   sideCircle: {
     alignItems: "center",
-    backgroundColor: "rgba(239, 219, 185, 0.94)",
-    borderColor: "rgba(255,255,255,0.76)",
+    backgroundColor: "rgba(203, 180, 154, 0.54)",
+    borderColor: "rgba(255,255,255,0.20)",
     borderRadius: 999,
     borderWidth: 1,
     height: 64,
     justifyContent: "center",
     shadowColor: "#6f5b4b",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.16,
-    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
     width: 64,
   },
   sideCircleActive: {

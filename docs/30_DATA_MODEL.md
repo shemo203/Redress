@@ -11,6 +11,8 @@ Later behavior changes:
 - `supabase/migrations/20260423000200_privacy_requests.sql`
 - `supabase/migrations/20260423000300_reports_review_workflow.sql`
 - `supabase/migrations/20260423000400_launch_analytics_events.sql`
+- `supabase/migrations/20260423000500_feed_ranking_seen_posts.sql`
+- `supabase/migrations/20260423000600_media_posts_images.sql`
 
 ## Core Tables
 
@@ -27,6 +29,7 @@ Later behavior changes:
 - `creator_id uuid` references `auth.users(id)` on delete cascade
 - `caption text` default `''`
 - `video_url text` required, `http/https` only
+- `media_type text` required, constrained to `'video' | 'image'`
 - `status text` required, constrained to `'draft' | 'published'`
 - `published_at timestamptz` nullable only for drafts
 - `created_at timestamptz` default `now()`
@@ -34,6 +37,8 @@ Later behavior changes:
 - status consistency check:
   - draft => `published_at is null`
   - published => `published_at is not null`
+- note:
+  - the legacy column name remains `video_url`, but it now stores the public asset URL for either a video post or an image post
 
 ### clothing_tags
 - `id uuid` primary key, default `gen_random_uuid()`
@@ -136,6 +141,25 @@ Later behavior changes:
 - `created_at timestamptz` default `now()`
 - unique constraint: `unique(post_id, user_id, session_id)` to keep one reveal-open event per user/post/session
 
+### post_watches
+- `id uuid` primary key, default `gen_random_uuid()`
+- `post_id uuid` references `video_posts(id)` on delete cascade
+- `user_id uuid` references `auth.users(id)` on delete cascade
+- `session_id text` required, non-empty
+- `watch_ms integer` required, constrained `>= 1000`
+- `completed boolean` required, default `false`
+- `created_at timestamptz` default `now()`
+- purpose:
+  - stores best-effort watch dwell time for feed ranking
+  - supports a lightweight completion/strong-watch signal in MVP
+
+## Storage
+- bucket `videos`:
+  - legacy public bucket used by older video uploads
+- bucket `media`:
+  - public bucket used by current photo and video uploads
+  - authenticated users can insert/update/delete only within their own top-level folder prefix (`auth.uid()/...`)
+
 ## Integrity Rules Enforced In DB
 1. One grade per user per post:
    - `grades unique(user_id, post_id)`
@@ -144,6 +168,7 @@ Later behavior changes:
    - `grades.value check (value between 1 and 10)`
 3. Post status is constrained:
    - `video_posts.status check (status in ('draft', 'published'))`
+   - `video_posts.media_type check (media_type in ('video', 'image'))`
 4. Publish requires at least one clothing tag:
    - enforced by RPC `public.publish_post(post_id uuid)` before status flip
 5. URL safety (MVP rule):
@@ -163,6 +188,8 @@ Later behavior changes:
    - `app_opens unique(user_id, session_id)`
    - `post_impressions unique(post_id, user_id, session_id)`
    - `tag_reveals unique(post_id, user_id, session_id)`
+11. Watch analytics guard:
+   - `post_watches.watch_ms check (watch_ms >= 1000)`
 
 ## RLS Summary
 RLS is enabled on:
@@ -179,6 +206,7 @@ RLS is enabled on:
 - `app_opens`
 - `post_impressions`
 - `tag_reveals`
+- `post_watches`
 
 ### Authenticated read only
 - `profiles`: `authenticated` can `select` profile rows
@@ -194,6 +222,7 @@ RLS is enabled on:
 - `app_opens`: no client read policy
 - `post_impressions`: no client read policy
 - `tag_reveals`: no client read policy
+- `post_watches`: no client read policy
 
 ### Anonymous access
 - `anon` has no direct read access to app data tables used by the feed, reveal items, grades, or comments.
@@ -214,6 +243,7 @@ RLS is enabled on:
 - `app_opens`: insert only when `user_id = auth.uid()` and session id is present
 - `post_impressions`: insert only when `user_id = auth.uid()`, session id is present, and post is published
 - `tag_reveals`: insert only when `user_id = auth.uid()`, session id is present, and post is published
+- `post_watches`: insert only when `user_id = auth.uid()`, session id is present, `watch_ms >= 1000`, and post is published
 
 ## RPC: publish_post(post_id uuid)
 `public.publish_post(post_id uuid)`:
@@ -252,6 +282,24 @@ RLS is enabled on:
   - `target_type`
 - joins reporter usernames from `profiles` when available
 - requires the caller to be in `moderation_admins`
+- runs as `security definer`; execute granted to `authenticated` only
+
+## RPC: rank_feed_posts(viewer_id uuid, page_limit integer, exclude_post_ids uuid[])
+`public.rank_feed_posts(viewer_id uuid, page_limit integer, exclude_post_ids uuid[])`:
+- returns a ranked list of published feed posts for the signed-in viewer
+- requires `viewer_id = auth.uid()`
+- only returns published posts
+- uses `post_impressions` as the MVP `seen_posts` source
+- returns `media_type` so the feed can render image and video posts correctly
+- ranking signals:
+  - unseen bonus
+  - recency
+  - `post_watches` (`watch_ms` and `completed`)
+  - grade count
+  - `tag_reveals`
+  - `outbound_clicks`
+  - negative weight for post reports
+- supports client-side “load more” by excluding already-loaded post ids
 - runs as `security definer`; execute granted to `authenticated` only
 
 ## RPC: set_report_review_status(target_report_id uuid, next_review_status text)

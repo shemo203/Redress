@@ -360,6 +360,92 @@ from impressions
 cross join clicks;
 ```
 
+### CTR lift before vs after preview-card launch
+Replace `preview_launch_date` with the date the premium outbound preview UX shipped.
+
+```sql
+with params as (
+  select date '2026-04-23' as preview_launch_date
+),
+impressions as (
+  select
+    case
+      when timezone('UTC', created_at)::date < (select preview_launch_date from params)
+        then 'before'
+      else 'after'
+    end as period,
+    count(distinct user_id::text || ':' || post_id::text)::numeric as impression_units
+  from public.post_impressions
+  group by 1
+),
+clicks as (
+  select
+    case
+      when timezone('UTC', created_at)::date < (select preview_launch_date from params)
+        then 'before'
+      else 'after'
+    end as period,
+    count(distinct user_id::text || ':' || post_id::text)::numeric as click_units
+  from public.outbound_clicks
+  group by 1
+)
+select
+  impressions.period,
+  impressions.impression_units::bigint as impression_units,
+  coalesce(clicks.click_units, 0)::bigint as click_units,
+  case
+    when impressions.impression_units = 0 then 0
+    else round(100.0 * coalesce(clicks.click_units, 0) / impressions.impression_units, 2)
+  end as true_ctr_pct
+from impressions
+left join clicks
+  on clicks.period = impressions.period
+order by case when impressions.period = 'before' then 1 else 2 end;
+```
+
+### Reveal → click lift before vs after preview-card launch
+Useful if you want to isolate how the preview card changed the conversion step after Reveal Items opened.
+
+```sql
+with params as (
+  select date '2026-04-23' as preview_launch_date
+),
+reveals as (
+  select
+    case
+      when timezone('UTC', created_at)::date < (select preview_launch_date from params)
+        then 'before'
+      else 'after'
+    end as period,
+    count(distinct user_id::text || ':' || post_id::text)::numeric as reveal_units
+  from public.tag_reveals
+  group by 1
+),
+clicks as (
+  select
+    case
+      when timezone('UTC', created_at)::date < (select preview_launch_date from params)
+        then 'before'
+      else 'after'
+    end as period,
+    count(distinct user_id::text || ':' || post_id::text)::numeric as click_units
+  from public.outbound_clicks
+  group by 1
+)
+select
+  reveals.period,
+  reveals.reveal_units::bigint as reveal_units,
+  coalesce(clicks.click_units, 0)::bigint as click_units,
+  case
+    when reveals.reveal_units = 0 then 0
+    else round(100.0 * coalesce(clicks.click_units, 0) / reveals.reveal_units, 2)
+  end as reveal_to_click_rate_pct
+from reveals
+left join clicks
+  on clicks.period = reveals.period
+order by case when reveals.period = 'before' then 1 else 2 end;
+```
+
 ### True CTR per post
 ```sql
 with impression_units as (

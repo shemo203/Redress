@@ -9,6 +9,7 @@ type PublishedPost = {
   created_at: string;
   creator_id: string;
   id: string;
+  media_type: "image" | "video";
   video_url: string;
 };
 
@@ -23,7 +24,7 @@ export default function PublishedPostsScreen() {
 
     const { data, error } = await supabase
       .from("video_posts")
-      .select("id, caption, creator_id, created_at, video_url")
+      .select("id, caption, creator_id, created_at, video_url, media_type")
       .eq("status", "published")
       .order("created_at", { ascending: false });
 
@@ -60,6 +61,7 @@ export default function PublishedPostsScreen() {
       {posts.map((post) => (
         <View key={post.id} style={styles.row}>
           <Text style={styles.caption}>{post.caption || "(no caption)"}</Text>
+          <Text style={styles.meta}>Media: {post.media_type}</Text>
           <Text style={styles.meta}>Creator: {post.creator_id}</Text>
           <Text style={styles.meta}>Created: {post.created_at}</Text>
         </View>

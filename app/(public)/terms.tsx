@@ -17,7 +17,7 @@ export default function TermsScreen() {
         {
           title: "Your content",
           body: [
-            "You may upload outfit videos, captions, clothing tags, links, comments, grades, reports, and profile information. You must have the rights and permissions needed to share anything you upload.",
+            "You may upload outfit photos/videos, captions, clothing tags, links, comments, grades, reports, and profile information. You must have the rights and permissions needed to share anything you upload.",
             "Do not upload illegal content, harassment, hate, explicit sexual content, threats, private information about others, malicious links, or content that infringes someone else's rights.",
           ],
         },

@@ -15,6 +15,7 @@ export type SocialPost = {
   caption: string;
   created_at: string;
   id: string;
+  media_type: "image" | "video";
   status: "draft" | "published";
   video_url: string;
 };
@@ -174,7 +175,7 @@ export async function fetchUserPosts(profileId: string, limit = 12) {
   try {
     const { data, error } = await supabase
       .from("video_posts")
-      .select("id, caption, video_url, created_at, status")
+      .select("id, caption, video_url, media_type, created_at, status")
       .eq("creator_id", profileId)
       .eq("status", "published")
       .order("created_at", { ascending: false })
