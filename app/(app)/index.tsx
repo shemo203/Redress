@@ -1,4 +1,5 @@
 import { Link, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import * as Sentry from "@sentry/react-native";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1594,6 +1595,17 @@ export default function FeedScreen() {
     }
 
     try {
+      Sentry.addBreadcrumb({
+        category: "commerce",
+        data: {
+          postId: linkPreviewState.postId,
+          tagId: linkPreviewState.tag.id,
+          url: validation.normalized,
+        },
+        level: "info",
+        message: "Outbound link opened",
+        type: "user",
+      });
       await WebBrowser.openBrowserAsync(validation.normalized);
       closeLinkPreview();
     } catch (error) {

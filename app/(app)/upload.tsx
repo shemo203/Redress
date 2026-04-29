@@ -1,5 +1,6 @@
 import * as ImagePicker from "expo-image-picker";
 import { Link } from "expo-router";
+import * as Sentry from "@sentry/react-native";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useState } from "react";
 import {
@@ -418,6 +419,18 @@ export default function UploadScreen() {
       }
 
       if (mode === "published") {
+        Sentry.addBreadcrumb({
+          category: "creator",
+          data: {
+            hasCaption: caption.trim().length > 0,
+            mediaType: pickedMedia.mediaType,
+            tagCount: normalizedTags.length,
+          },
+          level: "info",
+          message: "Publish attempted",
+          type: "user",
+        });
+
         const { error: publishError } = await supabase.rpc("publish_post", {
           post_id: insertedPost.id,
         });

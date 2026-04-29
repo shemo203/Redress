@@ -4,6 +4,15 @@
 - Supabase Auth (email+password + Google)
 - Auth is required to use the app
 
+## Crash and error monitoring
+- The beta app uses Sentry for crash/error monitoring and release health.
+- Current Sentry setup is intentionally minimal:
+  - crash/error events
+  - logs
+  - a small set of developer-defined breadcrumbs
+- `sendDefaultPii` is disabled in the client configuration for the current beta setup.
+- Session replay and the in-app feedback widget are not enabled in MVP beta builds.
+
 ## Media uploads
 - Creators can upload a single photo post or a single video post.
 - Uploaded media is stored in the configured Supabase Storage bucket.
