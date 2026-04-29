@@ -213,6 +213,7 @@ For `clothing_tags.url`, the client validation now enforces:
 - Terms page route: `app/(public)/terms.tsx` (`/terms`)
 - Privacy page route: `app/(public)/privacy.tsx` (`/privacy`)
 - Shared renderer: `src/features/legal/LegalDocumentScreen.tsx`
+- Public GitHub Pages privacy site source: `site/privacy/index.html`
 - Onboarding links are configured in `src/constants/auth.ts`:
   - `TERMS_URL = "/terms"`
   - `PRIVACY_URL = "/privacy"`
@@ -221,5 +222,6 @@ For `clothing_tags.url`, the client validation now enforces:
   - lists account, content/activity, and technical data categories
   - explains core purposes and GDPR-style legal bases
   - names Supabase as the auth/database/storage processor
+  - names Sentry as the beta crash/error monitoring processor
   - mentions user GDPR rights and includes clickable IMY complaint/right-to-information links
 - Before public launch, replace the MVP testing contact language with final controller identity, privacy/support contact details, processor list, retention periods, and transfer safeguards.

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redress Privacy Notice</title>
+    <meta
+      name="description"
+      content="The public privacy notice for the Redress MVP beta, written for users in Sweden and the EU/EEA."
+    />
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <span class="eyebrow">Redress privacy notice</span>
+        <div class="hero-grid">
+          <section class="hero-card">
+            <h1 class="hero-title">Privacy Notice</h1>
+            <p class="hero-copy">
+              This Privacy Notice explains how Redress handles personal data during MVP testing.
+              It is written for users in Sweden and the EU/EEA, where GDPR privacy rights apply.
+            </p>
+          </section>
+
+          <aside class="hero-meta">
+            <div class="meta-row">
+              <strong>Last updated</strong>
+              <span>23 April 2026</span>
+            </div>
+            <div class="meta-row">
+              <strong>Current scope</strong>
+              <span>Closed beta / MVP testing</span>
+            </div>
+            <div class="meta-row">
+              <strong>Helpful links</strong>
+              <a href="https://www.imy.se/en/individuals/forms-and-e-services/file-a-gdpr-complaint/">
+                File a GDPR complaint with IMY
+              </a>
+              <br />
+              <a href="https://www.imy.se/en/individuals/data-protection/your-rights-as-a-data-subject/">
+                Learn about your rights as a data subject
+              </a>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section-wrap">
+        <nav class="toc" aria-label="Privacy sections">
+          <h2>On this page</h2>
+          <ul>
+            <li><a href="#controller">Controller and scope</a></li>
+            <li><a href="#data">Data we process</a></li>
+            <li><a href="#why">Why we process it</a></li>
+            <li><a href="#bases">Legal bases</a></li>
+            <li><a href="#sharing">Sharing and processors</a></li>
+            <li><a href="#monitoring">Monitoring and analytics</a></li>
+            <li><a href="#retention">Retention and deletion</a></li>
+            <li><a href="#rights">Your GDPR rights</a></li>
+            <li><a href="#children">Children</a></li>
+          </ul>
+        </nav>
+
+        <div class="content">
+          <section class="card" id="controller">
+            <h2>Controller and scope</h2>
+            <p>
+              For MVP testing, Redress is the controller for the personal data processed in the
+              app. The app is operated from Sweden for development and testing.
+            </p>
+            <p>
+              For privacy questions or requests during testing, contact the Redress project owner
+              through the same invitation or testing channel that gave you access. A dedicated
+              privacy email or support contact should be added before public launch.
+            </p>
+          </section>
+
+          <section class="card" id="data">
+            <h2>Data we process</h2>
+            <ul>
+              <li>
+                <strong>Account data:</strong> email address, Supabase user id, username, avatar
+                URL, bio, sign-in/session data, and timestamps.
+              </li>
+              <li>
+                <strong>Content and activity data:</strong> photos/videos, captions, clothing
+                tags, optional product links, comments, grades, follows, reports, outbound link
+                click logs, app-open events, post impressions, and Reveal Items opens.
+              </li>
+              <li>
+                <strong>Technical data:</strong> app configuration needed to authenticate, store
+                content, load the feed, prevent abuse, and debug development issues.
+              </li>
+            </ul>
+          </section>
+
+          <section class="card" id="why">
+            <h2>Why we process it</h2>
+            <p>
+              We process account and content data to provide the app experience you request,
+              including authentication, publishing, feed display, profiles, comments, grading,
+              reporting, and link opening.
+            </p>
+            <p>
+              We process reports, logs, and safety signals to protect users, detect abuse,
+              troubleshoot problems, and maintain the service.
+            </p>
+            <p>
+              For MVP analytics, we use product and event data such as app opens, post
+              impressions, Reveal Items opens, published posts, grades, reports, and outbound
+              clicks to understand whether the product is working. Redress does not use ad tracking
+              in the MVP.
+            </p>
+          </section>
+
+          <section class="card" id="bases">
+            <h2>Legal bases</h2>
+            <p>
+              For core app functionality, the legal basis is performance of the user agreement.
+              For safety, abuse prevention, debugging, and product measurement, the legal basis is
+              legitimate interests. Where law requires consent, Redress should collect it
+              separately before relying on it.
+            </p>
+            <div class="note">
+              <strong>Beta note</strong>
+              Before public launch, this notice should be updated with the final controller
+              identity, processor list, retention periods, international transfer safeguards, and
+              direct legal contact details.
+            </div>
+          </section>
+
+          <section class="card" id="sharing">
+            <h2>Sharing and processors</h2>
+            <p>
+              Redress uses Supabase for authentication, database, and storage. Uploaded photos and
+              videos may be stored in the configured Supabase Storage bucket and can be visible
+              where the current app design makes them public.
+            </p>
+            <p>
+              Redress also uses Sentry for beta crash and error monitoring. The current setup is
+              intentionally minimal and uses privacy-conscious defaults, including disabled default
+              PII capture.
+            </p>
+            <p>
+              If you open a tagged clothing link, the destination website receives the request in
+              your browser and handles that visit under its own terms and privacy policy.
+            </p>
+          </section>
+
+          <section class="card" id="monitoring">
+            <h2>Monitoring and analytics</h2>
+            <p>
+              The MVP stores a small set of product-readiness events, including app opens, post
+              impressions, tag reveals, and lightweight post watch events. These are used to
+              improve feed ranking, understand usage, and verify that the beta is working.
+            </p>
+            <p>
+              Outbound link clicks are logged when a user confirms that they want to open a tagged
+              shopping link. Reports and moderation metadata are processed to support trust and
+              safety workflows.
+            </p>
+          </section>
+
+          <section class="card" id="retention">
+            <h2>Retention and deletion</h2>
+            <p>
+              MVP data is kept while your account or test data is needed to run and evaluate the
+              app. You can request deletion through the testing contact channel.
+            </p>
+            <p>
+              Some safety records, such as reports or abuse investigation data, may need to be
+              retained longer where needed to protect users, resolve disputes, or comply with law.
+            </p>
+            <p>
+              During the current beta, export and deletion requests are handled manually rather
+              than instantly inside the app.
+            </p>
+          </section>
+
+          <section class="card" id="rights">
+            <h2>Your GDPR rights</h2>
+            <p>
+              You can request access, correction, deletion, restriction, portability, and
+              objection where those rights apply under GDPR.
+            </p>
+            <p>
+              If you believe your personal data is handled incorrectly, you can complain to the
+              Swedish Authority for Privacy Protection, Integritetsskyddsmyndigheten (IMY).
+            </p>
+          </section>
+
+          <section class="card" id="children">
+            <h2>Children</h2>
+            <p>
+              Redress requires users to confirm they are at least 13 years old before account
+              creation. The app should not knowingly collect account data from children below that
+              age.
+            </p>
+          </section>
+        </div>
+      </section>
+
+      <footer class="footer">
+        This public page reflects the current Redress MVP beta behavior. Before broader public
+        launch, replace beta contact wording with the final support and privacy contact details.
+      </footer>
+    </main>
+  </body>
+</html>

@@ -66,6 +66,30 @@ Quick check:
 6. On the Privacy page, confirm the IMY GDPR complaint link and rights link are visible and open correctly.
 7. Before public launch, update the Privacy page with final controller/contact details and review the copy for GDPR/legal completeness.
 
+### Public privacy page via GitHub Pages
+Use this if you need a public privacy policy URL for App Store Connect / TestFlight.
+
+Files:
+- Site root: `site/`
+- Public privacy page: `site/privacy/index.html`
+- Shared site styles: `site/assets/site.css`
+- GitHub Pages workflow: `.github/workflows/pages.yml`
+
+Setup:
+1. Push the repo to GitHub.
+2. In GitHub, open `Settings` -> `Pages`.
+3. Under `Build and deployment`, choose `Source: GitHub Actions`.
+4. Push to `main` or manually run the `Deploy GitHub Pages` workflow from the `Actions` tab.
+5. After deployment, GitHub will publish the site at:
+   - `https://<github-username>.github.io/<repository-name>/`
+6. The privacy page URL for App Store Connect will be:
+   - `https://<github-username>.github.io/<repository-name>/privacy/`
+
+Notes:
+- The page mirrors the current in-app privacy notice and current MVP/beta behavior.
+- Before broader public launch, replace beta contact wording with final legal/privacy contact details.
+- If you rename the repository, the GitHub Pages URL path changes with it.
+
 ### Google (optional for Q3)
 1. In Supabase Dashboard: `Authentication` -> `Providers` -> `Google`, then enable Google.
 2. Configure Google OAuth client credentials in Supabase.
