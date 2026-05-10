@@ -1,4 +1,4 @@
-import { Redirect, Slot } from "expo-router";
+import { Redirect, Stack } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
@@ -31,13 +31,13 @@ export default function AppLayout() {
   }
 
   if (!session) {
-    return <Redirect href="/(auth)" />;
+    return <Redirect href="/(auth)/sign-in" />;
   }
 
   return (
     <View style={styles.appShell}>
       <View style={styles.contentWrap}>
-        <Slot />
+        <Stack screenOptions={{ headerShown: false }} />
       </View>
       <AppDock />
     </View>

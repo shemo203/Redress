@@ -18,24 +18,45 @@ Ship the MVP for an Expo client backed by Supabase.
 ## Compose Flow
 - The primary post flow lives on the upload screen.
 - Creators pick a single photo or video, add a caption, add clothing tags inline, and publish from the same screen.
+- Image posts now open a lightweight native crop step immediately after image selection.
+- The image crop step uses a consistent `4:5` post frame so the cropped result matches the app's intended image-post presentation.
+- The create-post screen should offer a simple full-post preview before publishing so creators can check the selected media, caption, and item tags together.
 - The publish CTA sits directly in the create flow under the items section instead of floating over the screen.
 - The upload and draft editor surfaces now use the same guided three-step framing:
   - `Draft`
   - `Tags`
   - `Publish`
+- The create-post description composer should stay visible while typing and offer an explicit keyboard dismiss path on mobile.
+- Video selection should keep the direct picker flow unchanged.
 - Saving a draft is still supported, but it is a fallback path instead of a required step in the main flow.
 - Publishing still requires at least one clothing tag and still goes through `publish_post(post_id)` for the final status flip.
 - Each post stores `media_type = 'image' | 'video'` so the feed and profile can render the correct media presentation.
 
+## Feed MVP Rules
+- The feed lives at the authenticated app root and is rendered by `app/(app)/index.tsx`.
+- Re-tapping the active dock destination should not replay navigation or animate the same screen again.
+- Re-tapping the active feed or account dock destination should scroll that surface back to the top when no modal/sheet is open.
+- If no published posts exist yet, the feed shows an empty-state CTA to upload the first post instead of trying to render an empty scroll experience.
+- Pulling down on the top feed card should trigger a native refresh of the feed.
+- Creators should be able to delete their own posts from the post card itself, with a confirmation step before removal.
+- The reveal-items sheet should present clean tagged-item cards and remain scrollable when a post has many items.
+- Reporting a tagged link from the reveal-items sheet should immediately swap into the report composer instead of staying behind the current sheet.
+
 ## Profile MVP Rules
 - The signed-in profile supports updating the profile photo from the device photo library.
 - The signed-in profile supports updating the profile description/bio.
+- Profile bios on account/public profile surfaces should be expandable when the text is longer than the collapsed preview.
 - Profile photo uploads reuse the existing authenticated storage path and update `profiles.avatar_url`.
 - Profile management actions are intentionally minimal in the account menu:
   - view public profile
   - share profile
   - privacy/support requests
   - sign out
+
+## Mobile Input Behavior
+- On iPhone, the sign-in password field, add-item URL field, and profile bio editor should remain visible when the keyboard opens.
+- These input surfaces should dismiss the keyboard cleanly via tap-outside or an explicit done action, without blocking buttons or scrolling.
+- The shared report composer should follow the same keyboard-safe pattern so the details field stays visible while typing.
 
 ## Q5 Tag URL Rule
 - If `EXPO_PUBLIC_REQUIRE_TAG_URLS=true`:

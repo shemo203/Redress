@@ -4,7 +4,37 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { theme } from "../constants";
 import { useAuth } from "../features/auth";
+import { type AppDockDestination, emitAppDockRetap } from "./appDockEvents";
 import { BrandMark } from "./BrandMark";
+
+const dockRouteConfig: Record<
+  AppDockDestination,
+  {
+    href: "/(app)" | "/(app)/account" | "/(app)/upload";
+    matches: (pathname: string) => boolean;
+  }
+> = {
+  account: {
+    href: "/(app)/account",
+    matches: (pathname) => pathname.startsWith("/account"),
+  },
+  feed: {
+    href: "/(app)",
+    matches: (pathname) => pathname === "/",
+  },
+  upload: {
+    href: "/(app)/upload",
+    matches: (pathname) => pathname.startsWith("/upload"),
+  },
+};
+
+function getActiveDockDestination(pathname: string): AppDockDestination | null {
+  return (
+    (Object.entries(dockRouteConfig).find(([, config]) => config.matches(pathname))?.[0] as
+      | AppDockDestination
+      | undefined) ?? null
+  );
+}
 
 function ProfileGlyph({ active = false }: { active?: boolean }) {
   return (
@@ -31,9 +61,17 @@ export function AppDock() {
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
 
-  const isUpload = pathname.startsWith("/(app)/upload");
-  const isAccount = pathname.startsWith("/(app)/account");
+  const normalizedPath = pathname === "" ? "/" : pathname;
+  const activeDestination = getActiveDockDestination(normalizedPath);
   const avatarUri = profile?.avatar_url?.trim() || null;
+
+  const handleDockPress = (destination: AppDockDestination) => {
+    if (activeDestination === destination) {
+      emitAppDockRetap(destination);
+      return;
+    }
+    router.replace(dockRouteConfig[destination].href);
+  };
 
   return (
     <View
@@ -43,19 +81,26 @@ export function AppDock() {
       <View style={styles.row}>
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.replace("/(app)/upload")}
+          onPress={() => handleDockPress("upload")}
           style={[
             styles.sideCircle,
             styles.leftSideCircle,
-            isUpload ? styles.sideCircleActive : undefined,
+            activeDestination === "upload" ? styles.sideCircleActive : undefined,
           ]}
         >
-          <Text style={[styles.plus, isUpload ? styles.plusActive : undefined]}>+</Text>
+          <Text
+            style={[
+              styles.plus,
+              activeDestination === "upload" ? styles.plusActive : undefined,
+            ]}
+          >
+            +
+          </Text>
         </Pressable>
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.replace("/(app)")}
+          onPress={() => handleDockPress("feed")}
           style={styles.centerItem}
         >
           <BrandMark
@@ -69,17 +114,17 @@ export function AppDock() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.replace("/(app)/account")}
+          onPress={() => handleDockPress("account")}
           style={[
             styles.sideCircle,
             styles.rightSideCircle,
-            isAccount ? styles.sideCircleActive : undefined,
+            activeDestination === "account" ? styles.sideCircleActive : undefined,
           ]}
         >
           {avatarUri ? (
             <Image source={{ uri: avatarUri }} style={styles.avatar} />
           ) : (
-            <ProfileGlyph active={isAccount} />
+            <ProfileGlyph active={activeDestination === "account"} />
           )}
         </Pressable>
       </View>

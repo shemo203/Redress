@@ -41,7 +41,7 @@ export default function SignUpScreen() {
     }
 
     setStatusMessage("Sign-up complete. Check email if confirmation is enabled.");
-    router.replace("/(auth)");
+    router.replace("/(auth)/sign-in");
   };
 
   return (
@@ -115,7 +115,7 @@ export default function SignUpScreen() {
 
       <View style={styles.linkRow}>
         <Text>Already have an account? </Text>
-        <Link href="/(auth)" style={styles.linkText}>
+        <Link href="/(auth)/sign-in" style={styles.linkText}>
           Sign in
         </Link>
       </View>

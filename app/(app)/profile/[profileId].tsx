@@ -27,7 +27,7 @@ import {
   unfollowUser,
 } from "../../../src/features/social";
 import { supabase } from "../../../src/lib/supabaseClient";
-import { MediaSnapshot, ProfileAvatar } from "../../../src/ui";
+import { ExpandableProfileBio, MediaSnapshot, ProfileAvatar } from "../../../src/ui";
 import { chrome } from "../../../src/ui/chrome";
 
 type ProfileFitPreview = SocialPost & {
@@ -323,10 +323,13 @@ export default function ProfileScreen() {
 
             <Text style={styles.profileName}>{formatDisplayName(profile.username)}</Text>
             <Text style={styles.profileHandle}>@{profile.username}</Text>
-            <Text numberOfLines={2} style={styles.profileBio}>
-              {profile.bio?.trim() ||
-                "Curating conscious style | Based in Stockholm | Lover of linen and vintage finds"}
-            </Text>
+            <ExpandableProfileBio
+              text={
+                profile.bio?.trim() ||
+                "Curating conscious style | Based in Stockholm | Lover of linen and vintage finds"
+              }
+              textStyle={styles.profileBio}
+            />
 
             <View style={styles.heroStatsRow}>
               <View style={styles.heroStat}>
@@ -399,7 +402,10 @@ export default function ProfileScreen() {
                   key={fit.id}
                   fit={fit}
                   onPress={() => {
-                    router.push(`/(app)?postId=${fit.id}`);
+                    router.push({
+                      params: { postId: fit.id },
+                      pathname: "/(app)",
+                    });
                   }}
                 />
               ))}
@@ -451,7 +457,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
   },
   fitScorePill: {
     backgroundColor: "rgba(246, 233, 219, 0.78)",

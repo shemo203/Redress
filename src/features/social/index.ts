@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabaseClient";
+import { getErrorMessage, isNetworkErrorMessage } from "../../utils/errors";
 
 export const COMMENT_MAX_LENGTH = 500;
 const uuidPattern =
@@ -45,15 +46,8 @@ export type CommentablePost = {
   status: "draft" | "published";
 };
 
-function toMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
-  }
-  return fallback;
-}
-
 function toFollowCountsMessage(error: unknown) {
-  const message = toMessage(error, "Failed to load follow counts.");
+  const message = getErrorMessage(error, "Failed to load follow counts.");
   const normalized = message.toLowerCase();
 
   if (
@@ -68,7 +62,7 @@ function toFollowCountsMessage(error: unknown) {
 }
 
 function toCommentMessage(error: unknown, fallback: string) {
-  const message = toMessage(error, fallback);
+  const message = getErrorMessage(error, fallback);
   const normalized = message.toLowerCase();
 
   if (
@@ -79,10 +73,7 @@ function toCommentMessage(error: unknown, fallback: string) {
     return "Comments are only available on published posts.";
   }
 
-  if (
-    normalized.includes("network request failed") ||
-    normalized.includes("failed to fetch")
-  ) {
+  if (isNetworkErrorMessage(message)) {
     return "Could not reach the server. Check connection and try again.";
   }
 
@@ -116,7 +107,7 @@ export async function fetchProfileById(profileId: string) {
   } catch (error) {
     return {
       data: null,
-      error: toMessage(error, "Failed to load profile."),
+      error: getErrorMessage(error, "Failed to load profile."),
     };
   }
 }
@@ -136,7 +127,7 @@ export async function fetchProfileByUsername(username: string) {
   } catch (error) {
     return {
       data: null,
-      error: toMessage(error, "Failed to load profile."),
+      error: getErrorMessage(error, "Failed to load profile."),
     };
   }
 }
@@ -166,7 +157,7 @@ export async function searchProfilesByUsername(query: string, limit = 20) {
   } catch (error) {
     return {
       data: [] as SocialProfile[],
-      error: toMessage(error, "Failed to search profiles."),
+      error: getErrorMessage(error, "Failed to search profiles."),
     };
   }
 }
@@ -188,7 +179,7 @@ export async function fetchUserPosts(profileId: string, limit = 12) {
   } catch (error) {
     return {
       data: [],
-      error: toMessage(error, "Failed to load posts."),
+      error: getErrorMessage(error, "Failed to load posts."),
     };
   }
 }
@@ -311,7 +302,7 @@ export async function isFollowingProfile(
   } catch (error) {
     return {
       data: false,
-      error: toMessage(error, "Failed to check follow state."),
+      error: getErrorMessage(error, "Failed to check follow state."),
     };
   }
 }
@@ -329,7 +320,7 @@ export async function followUser(followerId: string, followeeId: string) {
     };
   } catch (error) {
     return {
-      error: toMessage(error, "Failed to follow user."),
+      error: getErrorMessage(error, "Failed to follow user."),
       success: false,
     };
   }
@@ -349,7 +340,7 @@ export async function unfollowUser(followerId: string, followeeId: string) {
     };
   } catch (error) {
     return {
-      error: toMessage(error, "Failed to unfollow user."),
+      error: getErrorMessage(error, "Failed to unfollow user."),
       success: false,
     };
   }

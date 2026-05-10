@@ -1,9 +1,11 @@
 import * as ImagePicker from "expo-image-picker";
 import { Link, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -32,8 +34,16 @@ import {
 } from "../../src/features/privacy";
 import { fetchFollowCounts, type FollowCounts } from "../../src/features/social";
 import { supabase } from "../../src/lib/supabaseClient";
-import { GlassButton, GlassCard, MediaSnapshot, ProfileAvatar } from "../../src/ui";
+import { subscribeToAppDockRetap } from "../../src/ui/appDockEvents";
+import {
+  ExpandableProfileBio,
+  GlassButton,
+  GlassCard,
+  MediaSnapshot,
+  ProfileAvatar,
+} from "../../src/ui";
 import { chrome } from "../../src/ui/chrome";
+import { getDetailedErrorMessage } from "../../src/utils/errors";
 
 type AccountProfile = {
   avatar_url: string | null;
@@ -77,13 +87,6 @@ function formatDisplayName(username: string) {
     .join(" ");
 
   return formatted || "Your Profile";
-}
-
-function getRequestFailureMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return `${fallback}: ${error.message}`;
-  }
-  return fallback;
 }
 
 function formatCompactMetric(value: number) {
@@ -131,6 +134,8 @@ export default function AccountScreen() {
   const { height: screenHeight } = useWindowDimensions();
   const router = useRouter();
   const { profile, refreshProfile, user } = useAuth();
+  const accountScrollRef = useRef<ScrollView | null>(null);
+  const editProfileScrollRef = useRef<ScrollView | null>(null);
 
   const [accountCounts, setAccountCounts] = useState<FollowCounts | null>(null);
   const [accountProfile, setAccountProfile] = useState<AccountProfile | null>(null);
@@ -138,6 +143,7 @@ export default function AccountScreen() {
   const [editProfileBio, setEditProfileBio] = useState("");
   const [editProfileMessage, setEditProfileMessage] = useState<string | null>(null);
   const [editProfileVisible, setEditProfileVisible] = useState(false);
+  const [isEditProfileBioFocused, setIsEditProfileBioFocused] = useState(false);
   const [selectedAvatarAsset, setSelectedAvatarAsset] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -287,7 +293,7 @@ export default function AccountScreen() {
           }
         } catch (error) {
           if (!cancelled) {
-            setStatusMessage(getRequestFailureMessage(error, "Failed to load profile stats"));
+            setStatusMessage(getDetailedErrorMessage(error, "Failed to load profile stats"));
           }
           if (__DEV__) {
             console.error("Failed to load profile data", error);
@@ -307,6 +313,22 @@ export default function AccountScreen() {
     }, [profile?.avatar_url, profile?.username, user?.email, user?.id])
   );
 
+  useEffect(() => {
+    return subscribeToAppDockRetap("account", () => {
+      if (menuVisible || editProfileVisible || privacyModalVisible) {
+        return;
+      }
+
+      setStatusMessage(null);
+      requestAnimationFrame(() => {
+        accountScrollRef.current?.scrollTo({
+          animated: true,
+          y: 0,
+        });
+      });
+    });
+  }, [editProfileVisible, menuVisible, privacyModalVisible]);
+
   const handleSignOut = async () => {
     setStatusMessage(null);
     setIsSubmitting(true);
@@ -319,7 +341,7 @@ export default function AccountScreen() {
 
       setStatusMessage("Signed out.");
     } catch (error) {
-      setStatusMessage(getRequestFailureMessage(error, "Sign out failed"));
+      setStatusMessage(getDetailedErrorMessage(error, "Sign out failed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -366,7 +388,7 @@ export default function AccountScreen() {
         )} request submitted. We will handle this manually for MVP testing.`
       );
     } catch (error) {
-      setPrivacyStatus(getRequestFailureMessage(error, "Could not submit privacy request"));
+      setPrivacyStatus(getDetailedErrorMessage(error, "Could not submit privacy request"));
     } finally {
       setIsSubmittingPrivacy(false);
     }
@@ -399,6 +421,7 @@ export default function AccountScreen() {
     setEditProfileBio(accountProfile?.bio?.trim() ?? "");
     setSelectedAvatarAsset(null);
     setEditProfileMessage(null);
+    setIsEditProfileBioFocused(false);
     setEditProfileVisible(true);
   };
 
@@ -431,7 +454,7 @@ export default function AccountScreen() {
       setEditProfileAvatarUri(asset.uri);
       setEditProfileMessage(null);
     } catch (error) {
-      setEditProfileMessage(getRequestFailureMessage(error, "Could not choose profile photo"));
+      setEditProfileMessage(getDetailedErrorMessage(error, "Could not choose profile photo"));
       if (__DEV__) {
         console.error("Failed to pick avatar", error);
       }
@@ -515,7 +538,7 @@ export default function AccountScreen() {
       setSelectedAvatarAsset(null);
       setStatusMessage("Profile updated.");
     } catch (error) {
-      setEditProfileMessage(getRequestFailureMessage(error, "Could not update profile"));
+      setEditProfileMessage(getDetailedErrorMessage(error, "Could not update profile"));
       if (__DEV__) {
         console.error("Failed to save profile", error);
       }
@@ -527,6 +550,7 @@ export default function AccountScreen() {
   return (
     <>
       <ScrollView
+        ref={accountScrollRef}
         contentContainerStyle={[
           styles.container,
           {
@@ -534,6 +558,8 @@ export default function AccountScreen() {
             paddingTop: Math.max(insets.top + 10, 24),
           },
         ]}
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topBar}>
@@ -579,9 +605,7 @@ export default function AccountScreen() {
 
           <Text style={styles.profileName}>{displayName}</Text>
           <Text style={styles.profileHandle}>@{resolvedUsername}</Text>
-          <Text numberOfLines={2} style={styles.profileBio}>
-            {profileBio}
-          </Text>
+          <ExpandableProfileBio text={profileBio} textStyle={styles.profileBio} />
 
           <View style={styles.heroStatsRow}>
             <View style={styles.heroStat}>
@@ -638,7 +662,10 @@ export default function AccountScreen() {
                 key={fit.id}
                 fit={fit}
                 onPress={() => {
-                  router.push(`/(app)?postId=${fit.id}`);
+                  router.push({
+                    params: { postId: fit.id },
+                    pathname: "/(app)",
+                  });
                 }}
               />
             ))}
@@ -763,90 +790,144 @@ export default function AccountScreen() {
         animationType="slide"
         transparent
         visible={editProfileVisible}
-        onRequestClose={() => setEditProfileVisible(false)}
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setEditProfileVisible(false);
+        }}
       >
-        <Pressable style={styles.menuBackdrop} onPress={() => setEditProfileVisible(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.sheetKeyboardRoot}
+        >
           <Pressable
-            style={[styles.sheetPanel, { paddingBottom: Math.max(insets.bottom + 20, 28) }]}
-            onPress={(event) => event.stopPropagation()}
+            style={styles.menuBackdrop}
+            onPress={() => {
+              Keyboard.dismiss();
+              setEditProfileVisible(false);
+            }}
           >
-            <View style={styles.menuHandle} />
-            <View style={styles.sheetHeader}>
-              <View>
-                <Text style={chrome.eyebrow}>Profile</Text>
-                <Text style={styles.menuTitle}>Edit profile</Text>
-              </View>
-              <Pressable
-                onPress={() => setEditProfileVisible(false)}
-                style={styles.menuClose}
-              >
-                <Text style={styles.menuCloseText}>×</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView
-              contentContainerStyle={styles.sheetContent}
-              showsVerticalScrollIndicator={false}
+            <Pressable
+              style={[styles.sheetPanel, { paddingBottom: Math.max(insets.bottom + 20, 28) }]}
+              onPress={(event) => event.stopPropagation()}
             >
-              <View style={styles.editProfilePreview}>
-                <View style={styles.editProfileAvatarWrap}>
-                  <ProfileAvatar
-                    avatarUrl={editProfileAvatarUri}
-                    size={112}
-                    username={resolvedUsername}
-                  />
+              <View style={styles.menuHandle} />
+              <View style={styles.sheetHeader}>
+                <View>
+                  <Text style={chrome.eyebrow}>Profile</Text>
+                  <Text style={styles.menuTitle}>Edit profile</Text>
                 </View>
                 <Pressable
-                  onPress={() => void handlePickProfilePhoto()}
-                  style={styles.profileActionButtonGhost}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setEditProfileVisible(false);
+                  }}
+                  style={styles.menuClose}
                 >
-                  <Text style={styles.profileActionTextGhost}>Change photo</Text>
+                  <Text style={styles.menuCloseText}>×</Text>
                 </Pressable>
               </View>
 
-              <View style={styles.editSection}>
-                <Text style={styles.editLabel}>Description</Text>
-                <TextInput
-                  multiline
-                  maxLength={PROFILE_BIO_MAX_LENGTH}
-                  onChangeText={setEditProfileBio}
-                  placeholder="Tell people a little about your style"
-                  placeholderTextColor={theme.color.inkSoft}
-                  style={styles.editInput}
-                  textAlignVertical="top"
-                  value={editProfileBio}
-                />
-                <Text style={styles.editHint}>
-                  {editProfileBio.trim().length}/{PROFILE_BIO_MAX_LENGTH}
-                </Text>
-              </View>
+              <ScrollView
+                ref={editProfileScrollRef}
+                automaticallyAdjustKeyboardInsets
+                contentContainerStyle={styles.sheetContent}
+                keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+                keyboardShouldPersistTaps="handled"
+                onScrollBeginDrag={Keyboard.dismiss}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.editProfilePreview}>
+                  <View style={styles.editProfileAvatarWrap}>
+                    <ProfileAvatar
+                      avatarUrl={editProfileAvatarUri}
+                      size={112}
+                      username={resolvedUsername}
+                    />
+                  </View>
+                  <Pressable
+                    onPress={() => void handlePickProfilePhoto()}
+                    style={styles.profileActionButtonGhost}
+                  >
+                    <Text style={styles.profileActionTextGhost}>Change photo</Text>
+                  </Pressable>
+                </View>
 
-              {editProfileMessage ? <Text style={styles.status}>{editProfileMessage}</Text> : null}
-
-              <View style={styles.sheetActionsRow}>
-                <Pressable
-                  onPress={() => setEditProfileVisible(false)}
-                  style={[styles.profileActionButtonGhost, styles.sheetSecondaryButton]}
-                >
-                  <Text style={styles.profileActionTextGhost}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  disabled={isSavingProfile}
-                  onPress={() => void handleSaveProfile()}
-                  style={[
-                    styles.profileActionButton,
-                    styles.sheetPrimaryButton,
-                    isSavingProfile ? styles.menuActionDisabled : undefined,
-                  ]}
-                >
-                  <Text style={styles.profileActionText}>
-                    {isSavingProfile ? "Saving..." : "Save changes"}
+                <View style={styles.editSection}>
+                  <View style={styles.editLabelRow}>
+                    <Text style={styles.editLabel}>Description</Text>
+                    {isEditProfileBioFocused ? (
+                      <Pressable
+                        onPress={() => {
+                          setIsEditProfileBioFocused(false);
+                          Keyboard.dismiss();
+                        }}
+                        style={({ pressed }) => [styles.inputDoneButton, pressed ? styles.menuActionDisabled : undefined]}
+                      >
+                        <Text style={styles.inputDoneText}>Done</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <TextInput
+                    multiline
+                    maxLength={PROFILE_BIO_MAX_LENGTH}
+                    onBlur={() => setIsEditProfileBioFocused(false)}
+                    onChangeText={setEditProfileBio}
+                    onFocus={() => {
+                      setIsEditProfileBioFocused(true);
+                      requestAnimationFrame(() => {
+                        editProfileScrollRef.current?.scrollToEnd({ animated: true });
+                      });
+                    }}
+                    onSubmitEditing={() => {
+                      setIsEditProfileBioFocused(false);
+                      Keyboard.dismiss();
+                    }}
+                    placeholder="Tell people a little about your style"
+                    placeholderTextColor={theme.color.inkSoft}
+                    returnKeyType="done"
+                    style={styles.editInput}
+                    submitBehavior="blurAndSubmit"
+                    textAlignVertical="top"
+                    value={editProfileBio}
+                  />
+                  <Text style={styles.editHint}>
+                    {editProfileBio.trim().length}/{PROFILE_BIO_MAX_LENGTH}
                   </Text>
-                </Pressable>
-              </View>
-            </ScrollView>
+                </View>
+
+                {editProfileMessage ? <Text style={styles.status}>{editProfileMessage}</Text> : null}
+
+                <View style={styles.sheetActionsRow}>
+                  <Pressable
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setEditProfileVisible(false);
+                    }}
+                    style={[styles.profileActionButtonGhost, styles.sheetSecondaryButton]}
+                  >
+                    <Text style={styles.profileActionTextGhost}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={isSavingProfile}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      void handleSaveProfile();
+                    }}
+                    style={[
+                      styles.profileActionButton,
+                      styles.sheetPrimaryButton,
+                      isSavingProfile ? styles.menuActionDisabled : undefined,
+                    ]}
+                  >
+                    <Text style={styles.profileActionText}>
+                      {isSavingProfile ? "Saving..." : "Save changes"}
+                    </Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -1118,7 +1199,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
   },
   fitScorePill: {
     backgroundColor: "rgba(246, 233, 219, 0.78)",
@@ -1277,6 +1358,16 @@ const styles = StyleSheet.create({
     marginTop: 18,
     textAlign: "center",
   },
+  inputDoneButton: {
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  inputDoneText: {
+    color: theme.color.accentBright,
+    fontSize: 13,
+    fontWeight: "700",
+  },
   loadingCard: {
     alignItems: "center",
     backgroundColor: "rgba(255,249,243,0.84)",
@@ -1398,6 +1489,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 8,
     textAlign: "right",
+  },
+  editLabelRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   editInput: {
     backgroundColor: "rgba(255,250,246,0.98)",
@@ -1579,6 +1675,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 18,
+  },
+  sheetKeyboardRoot: {
+    flex: 1,
+    justifyContent: "flex-end",
   },
   sheetPanel: {
     backgroundColor: theme.color.shell,

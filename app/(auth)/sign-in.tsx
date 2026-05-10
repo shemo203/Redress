@@ -1,6 +1,16 @@
-import { Link, router } from "expo-router";
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Link, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import * as Linking from "expo-linking";
 
 import {
@@ -8,20 +18,32 @@ import {
   isGoogleAuthConfigured,
   theme,
 } from "../../src/constants";
+import { useAuth } from "../../src/features/auth";
 import { supabase } from "../../src/lib/supabaseClient";
 import { BrandMark } from "../../src/ui";
 
 export default function SignInScreen() {
+  const router = useRouter();
+  const { session } = useAuth();
+  const passwordInputRef = useRef<TextInput | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    router.replace("/(app)");
+  }, [router, session]);
+
   const handleEmailSignIn = async () => {
     setStatusMessage(null);
     setIsSubmitting(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
@@ -32,7 +54,10 @@ export default function SignInScreen() {
       return;
     }
 
-    router.replace("/(app)");
+    if (!data.session) {
+      setStatusMessage("Sign-in succeeded, but the session was not ready. Please try again.");
+      return;
+    }
   };
 
   const handleGoogleSignIn = async () => {
@@ -58,76 +83,106 @@ export default function SignInScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.heroGlow} />
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.container}
+    >
+      <Pressable
+        onPress={Keyboard.dismiss}
+        style={styles.dismissArea}
+      >
+        <View pointerEvents="none" style={styles.heroGlow} />
 
-      <View style={styles.header}>
-        <BrandMark elevated size={110} />
-        <Text style={styles.title}>Redress</Text>
-        <Text style={styles.subtitle}>Sign in to post, rate, and explore fits.</Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          autoCapitalize="none"
-          autoComplete="email"
-          keyboardType="email-address"
-          onChangeText={setEmail}
-          placeholder="you@example.com"
-          placeholderTextColor={theme.color.inkSoft}
-          style={styles.input}
-          value={email}
-        />
-
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          autoCapitalize="none"
-          onChangeText={setPassword}
-          placeholder="Password"
-          placeholderTextColor={theme.color.inkSoft}
-          secureTextEntry
-          style={styles.input}
-          value={password}
-        />
-
-        <Pressable
-          disabled={isSubmitting}
-          onPress={handleEmailSignIn}
-          style={[styles.button, styles.primaryButton]}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.primaryButtonText}>
-            {isSubmitting ? "Signing in..." : "Sign in"}
-          </Text>
-        </Pressable>
+          <View style={styles.header}>
+            <BrandMark elevated size={110} />
+            <Text style={styles.title}>Redress</Text>
+            <Text style={styles.subtitle}>Sign in to post, rate, and explore fits.</Text>
+          </View>
 
-        {isGoogleAuthConfigured ? (
-          <Pressable
-            disabled={isSubmitting}
-            onPress={handleGoogleSignIn}
-            style={[styles.button, styles.secondaryButton]}
-          >
-            <Text style={styles.secondaryButtonText}>Continue with Google</Text>
-          </Pressable>
-        ) : null}
+          <View style={styles.card}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              autoCapitalize="none"
+              autoComplete="email"
+              blurOnSubmit={false}
+              keyboardType="email-address"
+              onChangeText={setEmail}
+              onSubmitEditing={() => passwordInputRef.current?.focus()}
+              placeholder="you@example.com"
+              placeholderTextColor={theme.color.inkSoft}
+              returnKeyType="next"
+              style={styles.input}
+              value={email}
+            />
 
-        {statusMessage ? <Text style={styles.errorText}>{statusMessage}</Text> : null}
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              autoCapitalize="none"
+              onChangeText={setPassword}
+              onSubmitEditing={() => {
+                Keyboard.dismiss();
+                void handleEmailSignIn();
+              }}
+              placeholder="Password"
+              placeholderTextColor={theme.color.inkSoft}
+              ref={passwordInputRef}
+              returnKeyType="done"
+              secureTextEntry
+              style={styles.input}
+              value={password}
+            />
 
-        <View style={styles.linkRow}>
-          <Link href="/(auth)/forgot-password" style={styles.linkText}>
-            Forgot password?
-          </Link>
-        </View>
-        <View style={styles.linkRow}>
-          <Text style={styles.metaText}>Need an account? </Text>
-          <Link href="/(auth)/sign-up" style={styles.linkText}>
-            Sign up
-          </Link>
-        </View>
-      </View>
+            <Pressable
+              disabled={isSubmitting}
+              onPress={() => {
+                Keyboard.dismiss();
+                void handleEmailSignIn();
+              }}
+              style={[styles.button, styles.primaryButton]}
+            >
+              <Text style={styles.primaryButtonText}>
+                {isSubmitting ? "Signing in..." : "Sign in"}
+              </Text>
+            </Pressable>
 
-      <Text style={styles.footerCopy}>Fashion-first video sharing, grading, and discovery.</Text>
-    </View>
+            {isGoogleAuthConfigured ? (
+              <Pressable
+                disabled={isSubmitting}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  void handleGoogleSignIn();
+                }}
+                style={[styles.button, styles.secondaryButton]}
+              >
+                <Text style={styles.secondaryButtonText}>Continue with Google</Text>
+              </Pressable>
+            ) : null}
+
+            {statusMessage ? <Text style={styles.errorText}>{statusMessage}</Text> : null}
+
+            <View style={styles.linkRow}>
+              <Link href="/(auth)/forgot-password" style={styles.linkText}>
+                Forgot password?
+              </Link>
+            </View>
+            <View style={styles.linkRow}>
+              <Text style={styles.metaText}>Need an account? </Text>
+              <Link href="/(auth)/sign-up" style={styles.linkText}>
+                Sign up
+              </Link>
+            </View>
+          </View>
+
+          <Text style={styles.footerCopy}>Fashion-first video sharing, grading, and discovery.</Text>
+        </ScrollView>
+      </Pressable>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -152,8 +207,9 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: theme.color.shell,
     flex: 1,
-    justifyContent: "center",
-    padding: 24,
+  },
+  dismissArea: {
+    flex: 1,
   },
   footerCopy: {
     color: theme.color.inkSoft,
@@ -213,6 +269,11 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "#fff",
     fontWeight: "700",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: 24,
   },
   secondaryButton: {
     backgroundColor: theme.color.accentSoft,

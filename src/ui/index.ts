@@ -1,5 +1,6 @@
 export { AppDock } from "./AppDock";
 export { BrandMark } from "./BrandMark";
+export { ExpandableProfileBio } from "./ExpandableProfileBio";
 export { GlassButton } from "./GlassButton";
 export { GlassCard } from "./GlassCard";
 export { GradeSlider } from "./GradeSlider";

@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import {
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -37,6 +41,8 @@ export function ReportComposer({
   visible,
 }: ReportComposerProps) {
   const [details, setDetails] = useState(initialDetails);
+  const [isDetailsFocused, setIsDetailsFocused] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [reason, setReason] = useState<ReportReason | null>(null);
 
   useEffect(() => {
@@ -45,8 +51,24 @@ export function ReportComposer({
     }
 
     setDetails(initialDetails);
+    setIsDetailsFocused(false);
     setReason(null);
   }, [initialDetails, visible]);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
+      setIsKeyboardVisible(true);
+    });
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+      setIsKeyboardVisible(false);
+      setIsDetailsFocused(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   return (
     <Modal
@@ -55,75 +77,125 @@ export function ReportComposer({
       transparent
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.panel} onPress={() => {}}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>{subtitle}</Text>
-
-          <Text style={styles.label}>Reason</Text>
-          <View style={styles.reasonWrap}>
-            {REPORT_REASONS.map((option) => (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.keyboardRoot}
+      >
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => {
+            if (isKeyboardVisible) {
+              Keyboard.dismiss();
+              return;
+            }
+            onClose();
+          }}
+        >
+          <Pressable style={styles.panel} onPress={() => {}}>
+            <View style={styles.headerRow}>
+              <View style={styles.headerText}>
+                <Text style={styles.title}>{title}</Text>
+                <Text style={styles.subtitle}>{subtitle}</Text>
+              </View>
               <Pressable
-                key={option}
-                disabled={isSubmitting}
-                onPress={() => setReason(option)}
-                style={[
-                  styles.reasonChip,
-                  reason === option ? styles.reasonChipActive : undefined,
-                ]}
+                onPress={() => {
+                  if (isDetailsFocused) {
+                    Keyboard.dismiss();
+                    return;
+                  }
+                  onClose();
+                }}
+                style={styles.headerAction}
               >
-                <Text
-                  style={[
-                    styles.reasonChipText,
-                    reason === option ? styles.reasonChipTextActive : undefined,
-                  ]}
-                >
-                  {option}
+                <Text style={styles.headerActionText}>
+                  {isDetailsFocused ? "Done" : "Close"}
                 </Text>
               </Pressable>
-            ))}
-          </View>
+            </View>
 
-          <Text style={styles.label}>Details</Text>
-          <TextInput
-            editable={!isSubmitting}
-            multiline
-            maxLength={REPORT_DETAILS_MAX_LENGTH}
-            onChangeText={setDetails}
-            placeholder="Optional details"
-            placeholderTextColor={theme.color.muted}
-            style={styles.input}
-            textAlignVertical="top"
-            value={details}
-          />
-          <Text style={styles.helperText}>
-            {details.trim().length}/{REPORT_DETAILS_MAX_LENGTH}
-          </Text>
+            <ScrollView
+              automaticallyAdjustKeyboardInsets
+              contentContainerStyle={styles.scrollContent}
+              keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+              keyboardShouldPersistTaps="handled"
+              onScrollBeginDrag={Keyboard.dismiss}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.label}>Reason</Text>
+              <View style={styles.reasonWrap}>
+                {REPORT_REASONS.map((option) => (
+                  <Pressable
+                    key={option}
+                    disabled={isSubmitting}
+                    onPress={() => setReason(option)}
+                    style={[
+                      styles.reasonChip,
+                      reason === option ? styles.reasonChipActive : undefined,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.reasonChipText,
+                        reason === option ? styles.reasonChipTextActive : undefined,
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
 
-          {message ? <Text style={styles.message}>{message}</Text> : null}
+              <Text style={styles.label}>Details</Text>
+              <TextInput
+                editable={!isSubmitting}
+                maxLength={REPORT_DETAILS_MAX_LENGTH}
+                multiline
+                onBlur={() => setIsDetailsFocused(false)}
+                onChangeText={setDetails}
+                onFocus={() => setIsDetailsFocused(true)}
+                onSubmitEditing={() => {
+                  setIsDetailsFocused(false);
+                  Keyboard.dismiss();
+                }}
+                placeholder="Optional details"
+                placeholderTextColor={theme.color.muted}
+                returnKeyType="done"
+                style={styles.input}
+                submitBehavior="blurAndSubmit"
+                textAlignVertical="top"
+                value={details}
+              />
+              <Text style={styles.helperText}>
+                {details.trim().length}/{REPORT_DETAILS_MAX_LENGTH}
+              </Text>
 
-          <Pressable
-            disabled={isSubmitting || !reason}
-            onPress={() => {
-              if (!reason) {
-                return;
-              }
-              onSubmit({
-                details,
-                reason,
-              });
-            }}
-            style={[
-              styles.submitButton,
-              isSubmitting || !reason ? styles.submitButtonDisabled : undefined,
-            ]}
-          >
-            <Text style={styles.submitButtonText}>
-              {isSubmitting ? "Submitting..." : "Submit report"}
-            </Text>
+              {message ? <Text style={styles.message}>{message}</Text> : null}
+
+              <Pressable
+                disabled={isSubmitting || !reason}
+                onPress={() => {
+                  if (!reason) {
+                    return;
+                  }
+                  Keyboard.dismiss();
+                  onSubmit({
+                    details,
+                    reason,
+                  });
+                }}
+                style={[
+                  styles.submitButton,
+                  isSubmitting || !reason ? styles.submitButtonDisabled : undefined,
+                ]}
+              >
+                <Text style={styles.submitButtonText}>
+                  {isSubmitting ? "Submitting..." : "Submit report"}
+                </Text>
+              </Pressable>
+            </ScrollView>
           </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -140,6 +212,25 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: "right",
   },
+  headerAction: {
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  headerActionText: {
+    color: theme.color.accentBright,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  headerRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  headerText: {
+    flex: 1,
+    paddingRight: 12,
+  },
   input: {
     backgroundColor: "rgba(255,250,246,0.98)",
     borderColor: theme.color.border,
@@ -149,6 +240,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     minHeight: 118,
     padding: 12,
+  },
+  keyboardRoot: {
+    flex: 1,
+    justifyContent: "flex-end",
   },
   label: {
     color: theme.color.ink,
@@ -168,6 +263,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 26,
     maxHeight: "84%",
     padding: 18,
+  },
+  scrollContent: {
+    paddingBottom: 8,
   },
   reasonChip: {
     backgroundColor: "rgba(255,250,246,0.98)",

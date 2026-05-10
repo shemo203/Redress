@@ -95,8 +95,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setSession(data.session ?? null);
         setSessionLoaded(Boolean(data.session));
       } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (message.toLowerCase().includes("refresh token")) {
+          await supabase.auth.signOut({ scope: "local" });
+        }
         if (__DEV__) {
           console.error("Failed to read auth session", error);
+        }
+        if (isMounted) {
+          setSession(null);
+          setSessionLoaded(false);
         }
       } finally {
         if (isMounted) {

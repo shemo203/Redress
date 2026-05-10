@@ -1,9 +1,10 @@
-import { Link, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Sentry from "@sentry/react-native";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Keyboard,
@@ -12,6 +13,7 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -30,6 +32,17 @@ import {
   shouldLogOutboundClick,
 } from "../../src/features/analytics";
 import { useAuth } from "../../src/features/auth";
+import {
+  formatCommentTime,
+  getCaptionPreview,
+  getTagLinkSummary,
+  sortCommentsOldestFirst,
+  type FeedPost,
+  type FeedPostSourceRow,
+  type FeedTag,
+  type RankedFeedPostRow,
+} from "../../src/features/feed";
+import { deleteOwnPost } from "../../src/features/posts";
 import {
   addCommentToPost,
   COMMENT_MAX_LENGTH,
@@ -50,52 +63,12 @@ import {
   type ReportTargetType,
 } from "../../src/features/reports";
 import { supabase } from "../../src/lib/supabaseClient";
+import { subscribeToAppDockRetap } from "../../src/ui/appDockEvents";
 import { GradeSlider, ProfileAvatar } from "../../src/ui";
+import { getDetailedErrorMessage } from "../../src/utils/errors";
 import { validateClothingTagUrl } from "../../src/utils";
 
 const PAGE_SIZE = 8;
-
-type FeedTag = {
-  brand: string | null;
-  category: string | null;
-  id: string;
-  name: string;
-  url: string | null;
-};
-
-type FeedPost = {
-  caption: string;
-  creator_avatar_url: string | null;
-  created_at: string;
-  creator_id: string;
-  creator_username: string;
-  id: string;
-  instanceKey: string;
-  media_type: "image" | "video";
-  tags: FeedTag[];
-  video_url: string;
-};
-
-type FeedPostSourceRow = {
-  caption: string | null;
-  created_at: string;
-  creator_id: string;
-  id: string;
-  media_type: "image" | "video";
-  video_url: string;
-};
-
-type RankedFeedPostRow = {
-  caption: FeedPostSourceRow["caption"];
-  created_at: FeedPostSourceRow["created_at"];
-  creator_id: FeedPostSourceRow["creator_id"];
-  id: FeedPostSourceRow["id"];
-  media_type: FeedPostSourceRow["media_type"];
-  published_at: string | null;
-  ranking_score: number;
-  seen_by_viewer: boolean;
-  video_url: FeedPostSourceRow["video_url"];
-};
 
 type ReportDraft = {
   initialDetails?: string;
@@ -133,11 +106,13 @@ type FeedVideoCardProps = {
   commentCount: number;
   gradeCount: number;
   height: number;
+  isHeaderActionDisabled: boolean;
+  headerActionLabel: string;
   onOpenComments: () => void;
   onOpenGradeSheet: () => void;
+  onHeaderActionPress: () => void;
   onOpenProfile: () => void;
   onReportPost: () => void;
-  onReportProfile: () => void;
   onRevealItems: () => void;
   onToggleCaption: () => void;
   post: FeedPost;
@@ -146,23 +121,6 @@ type FeedVideoCardProps = {
   userGrade: number | null;
 };
 
-function getCaptionPreview(caption: string) {
-  const fallback = "Fresh fit, no caption yet.";
-  const source = caption.trim().length > 0 ? caption.trim() : fallback;
-
-  if (source.length <= 88) {
-    return {
-      text: source,
-      truncated: false,
-    };
-  }
-
-  return {
-    text: `${source.slice(0, 88).trimEnd()}…`,
-    truncated: true,
-  };
-}
-
 function FeedVideoCard({
   active,
   avgGradeText,
@@ -170,11 +128,13 @@ function FeedVideoCard({
   commentCount,
   gradeCount,
   height,
+  isHeaderActionDisabled,
+  headerActionLabel,
   onOpenComments,
   onOpenGradeSheet,
+  onHeaderActionPress,
   onOpenProfile,
   onReportPost,
-  onReportProfile,
   onRevealItems,
   onToggleCaption,
   post,
@@ -244,8 +204,15 @@ function FeedVideoCard({
               </Text>
             </View>
           </Pressable>
-          <Pressable onPress={onReportProfile} style={styles.creatorButton}>
-            <Text style={styles.creatorButtonText}>Report</Text>
+          <Pressable
+            disabled={isHeaderActionDisabled}
+            onPress={onHeaderActionPress}
+            style={[
+              styles.creatorButton,
+              isHeaderActionDisabled ? styles.creatorButtonDisabled : undefined,
+            ]}
+          >
+            <Text style={styles.creatorButtonText}>{headerActionLabel}</Text>
           </Pressable>
         </View>
       </View>
@@ -312,45 +279,6 @@ function videoPlayerSafePause(player: { pause: () => void }) {
   } catch {
     // no-op for occasional player race during mount/unmount
   }
-}
-
-function getRequestFailureMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return `${fallback}: ${error.message}`;
-  }
-  return fallback;
-}
-
-function formatCommentTime(dateString: string) {
-  const date = new Date(dateString);
-  const diffMs = Date.now() - date.getTime();
-  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
-
-  if (diffMinutes < 1) {
-    return "just now";
-  }
-  if (diffMinutes < 60) {
-    return `${diffMinutes}m`;
-  }
-
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) {
-    return `${diffHours}h`;
-  }
-
-  const diffDays = Math.round(diffHours / 24);
-  if (diffDays < 7) {
-    return `${diffDays}d`;
-  }
-
-  return date.toLocaleDateString();
-}
-
-function sortCommentsOldestFirst(comments: SocialComment[]) {
-  return [...comments].sort(
-    (left, right) =>
-      new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
-  );
 }
 
 function CommentsSheet({
@@ -563,7 +491,10 @@ export default function FeedScreen() {
 
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [hasMore, setHasMore] = useState(true);
+  const [hasResolvedInitialLoad, setHasResolvedInitialLoad] = useState(false);
+  const [isFeedRefreshing, setIsFeedRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [feedMessage, setFeedMessage] = useState<string | null>(null);
   const [isFeedFocused, setIsFeedFocused] = useState(true);
@@ -611,6 +542,8 @@ export default function FeedScreen() {
   const commentCooldownUntilRef = useRef<Record<string, number>>({});
   const flatListRef = useRef<FlatList<FeedPost> | null>(null);
   const linkPreviewRequestIdRef = useRef(0);
+  const loadInFlightRef = useRef(false);
+  const postsRef = useRef<FeedPost[]>([]);
   const requestedPostFetchRef = useRef<string | null>(null);
   const requestedPostFocusedRef = useRef<string | null>(null);
   const activeWatchRef = useRef<{ postId: string; startedAt: number } | null>(null);
@@ -635,6 +568,9 @@ export default function FeedScreen() {
   ).current;
 
   const activePost = posts[activeIndex] ?? null;
+  const showInitialLoader = posts.length === 0 && !hasResolvedInitialLoad;
+  const showEmptyFeedState =
+    !isLoading && hasResolvedInitialLoad && posts.length === 0;
   const gradeSheetPost =
     posts.find((post) => post.id === gradeSheetPostId) ?? activePost ?? null;
   const gradeSheetStats = gradeSheetPost
@@ -647,6 +583,102 @@ export default function FeedScreen() {
     setReportDraft(draft);
     setReportMessage(null);
   };
+
+  const handleDeletePost = useCallback(
+    (post: FeedPost) => {
+      Alert.alert(
+        "Delete post?",
+        "This removes the post from your profile and feed. Any tags, grades, comments, and reports attached to it will be removed too.",
+        [
+          { style: "cancel", text: "Cancel" },
+          {
+            style: "destructive",
+            text: "Delete",
+            onPress: () => {
+              void confirmDeletePost(post);
+            },
+          },
+        ]
+      );
+    },
+    []
+  );
+
+  const confirmDeletePost = useCallback(
+    async (post: FeedPost) => {
+      if (deletingPostId) {
+        return;
+      }
+
+      setDeletingPostId(post.id);
+      setFeedMessage(null);
+
+      const result = await deleteOwnPost(post.id);
+      setDeletingPostId(null);
+
+      if (result.error) {
+        setFeedMessage(result.error);
+        return;
+      }
+
+      if (activeWatchRef.current?.postId === post.id) {
+        activeWatchRef.current = null;
+      }
+
+      const deletedIndex = postsRef.current.findIndex((candidate) => candidate.id === post.id);
+
+      setPosts((current) => current.filter((candidate) => candidate.id !== post.id));
+      setGradeStatsByPost((current) => {
+        const next = { ...current };
+        delete next[post.id];
+        return next;
+      });
+      setCommentCountsByPost((current) => {
+        const next = { ...current };
+        delete next[post.id];
+        return next;
+      });
+      setGradeMessageByPost((current) => {
+        const next = { ...current };
+        delete next[post.id];
+        return next;
+      });
+
+      if (expandedCaptionPostId === post.id) {
+        setExpandedCaptionPostId(null);
+      }
+      if (gradeSheetPostId === post.id) {
+        setGradeSheetVisible(false);
+        setGradeSheetPostId(null);
+      }
+      if (commentsSheetPostId === post.id) {
+        setCommentsSheetVisible(false);
+        setCommentsSheetPostId(null);
+        setCommentsForSheet([]);
+      }
+      if (requestedPostId === post.id) {
+        router.replace("/(app)");
+      }
+
+      const remainingCount = Math.max(0, postsRef.current.length - 1);
+      if (remainingCount === 0) {
+        setActiveIndex(0);
+      } else if (deletedIndex >= 0 && activeIndex >= remainingCount) {
+        setActiveIndex(remainingCount - 1);
+      }
+
+      setFeedMessage(result.storageWarning ?? "Post deleted.");
+    },
+    [
+      activeIndex,
+      commentsSheetPostId,
+      deletingPostId,
+      expandedCaptionPostId,
+      gradeSheetPostId,
+      requestedPostId,
+      router,
+    ]
+  );
 
   const focusFeedPostAtIndex = useCallback(
     (index: number) => {
@@ -887,25 +919,18 @@ export default function FeedScreen() {
     await refreshCommentCounts([postId]);
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      setIsFeedFocused(true);
-      if (posts.length === 0 && !isLoading) {
-        void loadPosts(true);
-      } else if (posts.length > 0) {
-        void refreshCommentCounts(posts.map((post) => post.id));
-      }
-      return () => {
-        setIsFeedFocused(false);
-      };
-    }, [isLoading, posts])
-  );
-
-  const loadPosts = async (reset: boolean) => {
-    if (isLoading || !user?.id) {
+  const loadPosts = async (
+    reset: boolean,
+    reason: "initial" | "paginate" | "refresh" = "initial"
+  ) => {
+    if (loadInFlightRef.current || !user?.id) {
       return;
     }
 
+    loadInFlightRef.current = true;
+    if (reason === "refresh") {
+      setIsFeedRefreshing(true);
+    }
     setIsLoading(true);
     setFeedMessage(null);
     try {
@@ -985,21 +1010,83 @@ export default function FeedScreen() {
       await refreshGradeStats(mergedIds);
       await refreshCommentCounts(mergedIds);
     } catch (error) {
-      setFeedMessage(getRequestFailureMessage(error, "Failed to load feed"));
+      setFeedMessage(getDetailedErrorMessage(error, "Failed to load feed"));
       if (__DEV__) {
         console.error("Failed to load feed", error);
       }
     } finally {
+      if (reset) {
+        setHasResolvedInitialLoad(true);
+      }
+      loadInFlightRef.current = false;
+      setIsFeedRefreshing(false);
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setIsFeedFocused(true);
+
+      if (!user?.id) {
+        return () => {
+          setIsFeedFocused(false);
+        };
+      }
+
+      if (!hasResolvedInitialLoad) {
+        void loadPosts(true, "initial");
+      } else if (postsRef.current.length > 0) {
+        void refreshCommentCounts(postsRef.current.map((post) => post.id));
+      }
+
+      return () => {
+        setIsFeedFocused(false);
+      };
+    }, [hasResolvedInitialLoad, user?.id])
+  );
+
+  useEffect(() => {
     if (!user?.id) {
       return;
     }
-    void loadPosts(true);
+    void loadPosts(true, "initial");
   }, [requestedPostId, user?.id]);
+
+  useEffect(() => {
+    return subscribeToAppDockRetap("feed", () => {
+      if (
+        commentsSheetVisible ||
+        gradeSheetVisible ||
+        sheetVisible ||
+        linkPreviewVisible ||
+        reportDraft
+      ) {
+        return;
+      }
+
+      setExpandedCaptionPostId(null);
+      setFeedMessage(null);
+      setActiveIndex(0);
+
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToOffset({
+          animated: true,
+          offset: 0,
+        });
+      });
+    });
+  }, [
+    commentsSheetVisible,
+    gradeSheetVisible,
+    linkPreviewVisible,
+    reportDraft,
+    sheetVisible,
+  ]);
 
   useEffect(() => {
     requestedPostFetchRef.current = null;
@@ -1053,7 +1140,7 @@ export default function FeedScreen() {
         if (__DEV__) {
           console.error("Failed to open selected post in feed", error);
         }
-        setFeedMessage(getRequestFailureMessage(error, "Could not open that post"));
+        setFeedMessage(getDetailedErrorMessage(error, "Could not open that post"));
       }
     })();
 
@@ -1639,106 +1726,137 @@ export default function FeedScreen() {
     <View style={styles.screen}>
       {feedMessage ? <Text style={styles.feedMessage}>{feedMessage}</Text> : null}
 
-      {isLoading && posts.length === 0 ? (
+      {showInitialLoader ? (
         <View style={styles.fullscreenCenter}>
           <ActivityIndicator size="large" color="#fff" />
           <Text style={styles.centerText}>Loading feed…</Text>
         </View>
       ) : null}
 
-      {!isLoading && posts.length === 0 ? (
+      {showEmptyFeedState ? (
         <View style={styles.fullscreenCenter}>
           <Text style={styles.centerText}>No published posts yet.</Text>
-          <Link href="/(app)/upload" style={styles.overlayLink}>
-            Upload a post
-          </Link>
+          <Text style={styles.emptyFeedCopy}>
+            Publish the first look to populate the feed and profile grid.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(app)/upload")}
+            style={styles.overlayButton}
+          >
+            <Text style={styles.overlayButtonText}>Upload a post</Text>
+          </Pressable>
         </View>
       ) : null}
 
-      <FlatList
-        ref={flatListRef}
-        data={posts}
-        getItemLayout={(_, index) => ({
-          index,
-          length: cardHeight,
-          offset: cardHeight * index,
-        })}
-        keyExtractor={(item) => item.instanceKey}
-        onScrollToIndexFailed={({ index }) => {
-          requestAnimationFrame(() => {
-            flatListRef.current?.scrollToIndex({
-              animated: false,
-              index,
+      {!showEmptyFeedState ? (
+        <FlatList
+          ref={flatListRef}
+          data={posts}
+          getItemLayout={(_, index) => ({
+            index,
+            length: cardHeight,
+            offset: cardHeight * index,
+          })}
+          keyExtractor={(item) => item.instanceKey}
+          onScrollToIndexFailed={({ index }) => {
+            requestAnimationFrame(() => {
+              flatListRef.current?.scrollToIndex({
+                animated: false,
+                index,
+              });
             });
-          });
-        }}
-        renderItem={({ item, index }) => {
-          const stats = gradeStatsByPost[item.id];
-          return (
-          <FeedVideoCard
-            post={item}
-            height={cardHeight}
-            active={index === activeIndex && isFeedFocused && !commentsSheetVisible}
-            shouldMountVideo={Math.abs(index - activeIndex) <= 1}
-            captionExpanded={expandedCaptionPostId === item.id}
-            commentCount={commentCountsByPost[item.id] ?? 0}
-            onToggleCaption={() => {
-              setExpandedCaptionPostId((current) =>
-                current === item.id ? null : item.id
-              );
-            }}
-            onOpenComments={() => {
-              openCommentsSheet(item.id);
-            }}
-            onOpenGradeSheet={() => {
-              openGradeSheet(item.id);
-            }}
-            onOpenProfile={() => {
-              router.push(`/(app)/profile/${item.creator_id}`);
-            }}
-            onReportPost={() => {
-              openReportComposer({
-                subtitle: "Report this video post",
-                targetId: item.id,
-                targetType: "post",
-                title: "Report post",
-              });
-            }}
-            onReportProfile={() => {
-              openReportComposer({
-                subtitle: `Report @${item.creator_username}`,
-                targetId: item.creator_id,
-                targetType: "profile",
-                title: "Report profile",
-              });
-            }}
-            onRevealItems={openRevealSheet}
-            topInset={insets.top}
-            avgGradeText={stats?.avg != null ? stats.avg.toFixed(1) : "—"}
-            gradeCount={stats?.count ?? 0}
-            userGrade={stats?.userGrade ?? null}
-          />
-          );
-        }}
-        pagingEnabled
-        snapToAlignment="start"
-        decelerationRate="fast"
-        onEndReached={() => {
-          if (!hasMore || isLoading) {
-            return;
+          }}
+          renderItem={({ item, index }) => {
+            const stats = gradeStatsByPost[item.id];
+            return (
+              <FeedVideoCard
+                post={item}
+                height={cardHeight}
+                active={index === activeIndex && isFeedFocused && !commentsSheetVisible}
+                shouldMountVideo={Math.abs(index - activeIndex) <= 1}
+                captionExpanded={expandedCaptionPostId === item.id}
+                commentCount={commentCountsByPost[item.id] ?? 0}
+                headerActionLabel={
+                  item.creator_id === user?.id
+                    ? deletingPostId === item.id
+                      ? "Deleting..."
+                      : "Delete"
+                    : "Report"
+                }
+                isHeaderActionDisabled={deletingPostId === item.id}
+                onToggleCaption={() => {
+                  setExpandedCaptionPostId((current) =>
+                    current === item.id ? null : item.id
+                  );
+                }}
+                onHeaderActionPress={() => {
+                  if (item.creator_id === user?.id) {
+                    handleDeletePost(item);
+                    return;
+                  }
+                  openReportComposer({
+                    subtitle: `Report @${item.creator_username}`,
+                    targetId: item.creator_id,
+                    targetType: "profile",
+                    title: "Report profile",
+                  });
+                }}
+                onOpenComments={() => {
+                  openCommentsSheet(item.id);
+                }}
+                onOpenGradeSheet={() => {
+                  openGradeSheet(item.id);
+                }}
+                onOpenProfile={() => {
+                  router.push(`/(app)/profile/${item.creator_id}`);
+                }}
+                onReportPost={() => {
+                  openReportComposer({
+                    subtitle: "Report this video post",
+                    targetId: item.id,
+                    targetType: "post",
+                    title: "Report post",
+                  });
+                }}
+                onRevealItems={openRevealSheet}
+                topInset={insets.top}
+                avgGradeText={stats?.avg != null ? stats.avg.toFixed(1) : "—"}
+                gradeCount={stats?.count ?? 0}
+                userGrade={stats?.userGrade ?? null}
+              />
+            );
+          }}
+          pagingEnabled
+          snapToAlignment="start"
+          decelerationRate="fast"
+          onEndReached={() => {
+            if (!hasMore || isLoading) {
+              return;
+            }
+            void loadPosts(false, "paginate");
+          }}
+          onEndReachedThreshold={0.5}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          windowSize={3}
+          initialNumToRender={2}
+          maxToRenderPerBatch={2}
+          removeClippedSubviews
+          ListFooterComponent={listFooter}
+          refreshControl={
+            <RefreshControl
+              onRefresh={() => {
+                void loadPosts(true, "refresh");
+              }}
+              progressViewOffset={Math.max(insets.top + 10, 24)}
+              refreshing={isFeedRefreshing}
+              tintColor={theme.color.accentBright}
+            />
           }
-          void loadPosts(false);
-        }}
-        onEndReachedThreshold={0.5}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        windowSize={3}
-        initialNumToRender={2}
-        maxToRenderPerBatch={2}
-        removeClippedSubviews
-        ListFooterComponent={listFooter}
-        scrollEnabled={posts.length > 0}
-      />
+          scrollEnabled={posts.length > 0}
+        />
+      ) : null}
 
       <CommentsSheet
         comments={commentsForSheet}
@@ -1836,105 +1954,126 @@ export default function FeedScreen() {
           }}
         >
           <Pressable style={styles.sheetPanel} onPress={() => {}}>
-            <Text style={styles.sheetTitle}>Reveal items</Text>
-            <Text style={styles.sheetSubTitle}>
-              Post: {activePost?.id ?? "No post selected"}
-            </Text>
+            <View style={styles.sheetHeaderRow}>
+              <View style={styles.sheetHeaderText}>
+                <Text style={styles.sheetTitle}>Reveal items</Text>
+                <Text style={styles.sheetSubTitle}>
+                  {!activePost
+                    ? "No post selected"
+                    : activePost.tags.length === 1
+                      ? "1 tagged item"
+                      : `${activePost.tags.length} tagged items`}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  closeLinkPreview();
+                  setSheetVisible(false);
+                }}
+                style={styles.sheetCloseButton}
+              >
+                <Text style={styles.sheetCloseText}>Done</Text>
+              </Pressable>
+            </View>
 
-            {sheetMessage ? <Text style={styles.sheetMessage}>{sheetMessage}</Text> : null}
+            <ScrollView
+              contentContainerStyle={styles.sheetScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {sheetMessage ? <Text style={styles.sheetMessage}>{sheetMessage}</Text> : null}
 
-            {!activePost || activePost.tags.length === 0 ? (
-              <Text style={styles.sheetEmpty}>No items tagged for this post.</Text>
-            ) : (
-              activePost.tags.map((tag) => {
-                const link = validateClothingTagUrl(tag.url, {
-                  requireUrl: false,
-                });
-                const hasLink = link.present;
-                const domainPolicy = link.valid
-                  ? getOutboundLinkPolicy(link.normalized)
-                  : null;
-                const statusCopy = !hasLink
-                  ? "This tag does not have an outbound link yet."
-                  : !link.valid
-                    ? "Only valid http:// or https:// links can be previewed."
-                    : domainPolicy && !domainPolicy.allowed
-                      ? domainPolicy.reason ?? "This destination is blocked."
-                      : null;
-                const blockedLink = statusCopy != null;
+              {!activePost || activePost.tags.length === 0 ? (
+                <Text style={styles.sheetEmpty}>No items tagged for this post.</Text>
+              ) : (
+                activePost.tags.map((tag) => {
+                  const linkSummary = getTagLinkSummary(tag);
 
-                return (
-                  <View
-                    key={tag.id}
-                    style={[
-                      styles.tagRow,
-                      !hasLink ? styles.tagRowDisabled : undefined,
-                    ]}
-                  >
-                    <Text style={styles.tagName}>{tag.name}</Text>
-                    <Text style={styles.tagMeta}>Brand: {tag.brand || "-"}</Text>
-                    <Text style={styles.tagMeta}>Category: {tag.category || "-"}</Text>
-                    <Text style={styles.tagMeta}>
-                      {hasLink
-                        ? `URL: ${tag.url}`
-                        : "No outbound link attached"}
-                    </Text>
-                    <View style={styles.tagActionRow}>
-                      <Pressable
-                        onPress={() => {
-                          if (!hasLink) {
-                            setSheetMessage("This tag does not have an outbound link.");
-                            return;
-                          }
-                          if (!link.valid) {
-                            setSheetMessage("Blocked unsafe link.");
-                            return;
-                          }
-                          if (domainPolicy && !domainPolicy.allowed) {
-                            setSheetMessage(domainPolicy.reason ?? "Blocked unsafe link.");
-                            return;
-                          }
-                          void openTagLink(tag);
-                        }}
-                        style={[
-                          styles.tagOpenButton,
-                          blockedLink ? styles.tagOpenButtonBlocked : undefined,
-                        ]}
-                      >
-                        <Text style={styles.tagOpenText}>
-                          {!hasLink
-                            ? "No link"
-                            : !link.valid
-                              ? "Unsafe link blocked"
-                              : domainPolicy && !domainPolicy.allowed
-                                ? "Blocked domain"
-                                : "Preview link"}
-                        </Text>
-                      </Pressable>
-                      {hasLink ? (
+                  return (
+                    <View
+                      key={tag.id}
+                      style={[
+                        styles.tagRow,
+                        !linkSummary.canPreview ? styles.tagRowDisabled : undefined,
+                      ]}
+                    >
+                      <View style={styles.tagHeaderRow}>
+                        <Text style={styles.tagName}>{tag.name}</Text>
+                        <View
+                          style={[
+                            styles.tagLinkPill,
+                            linkSummary.blocked ? styles.tagLinkPillBlocked : undefined,
+                            !linkSummary.canPreview && !linkSummary.blocked
+                              ? styles.tagLinkPillMuted
+                              : undefined,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.tagLinkPillText,
+                              linkSummary.blocked ? styles.tagLinkPillTextBlocked : undefined,
+                            ]}
+                          >
+                            {linkSummary.detail}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.tagMetaRow}>
+                        {tag.brand ? (
+                          <Text style={styles.tagMetaChip}>{tag.brand}</Text>
+                        ) : null}
+                        {tag.category ? (
+                          <Text style={styles.tagMetaChip}>{tag.category}</Text>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.tagActionRow}>
                         <Pressable
                           onPress={() => {
-                            openReportComposer({
-                              initialDetails: tag.url ?? "",
-                              subtitle: `Report tagged link on ${tag.name}`,
-                              targetId: tag.id,
-                              targetType: "link",
-                              title: "Report link",
-                            });
+                            if (!linkSummary.canPreview) {
+                              setSheetMessage(linkSummary.reason);
+                              return;
+                            }
+                            void openTagLink(tag);
                           }}
-                          style={styles.tagReportButton}
+                          style={[
+                            styles.tagOpenButton,
+                            !linkSummary.canPreview ? styles.tagOpenButtonBlocked : undefined,
+                          ]}
                         >
-                          <Text style={styles.tagReportText}>Report link</Text>
+                          <Text style={styles.tagOpenText}>
+                            {linkSummary.canPreview ? "Preview link" : linkSummary.detail}
+                          </Text>
                         </Pressable>
+                        {tag.url ? (
+                          <Pressable
+                            onPress={() => {
+                              closeLinkPreview();
+                              setSheetVisible(false);
+                              openReportComposer({
+                                initialDetails: tag.url ?? "",
+                                subtitle: `Report tagged link on ${tag.name}`,
+                                targetId: tag.id,
+                                targetType: "link",
+                                title: "Report link",
+                              });
+                            }}
+                            style={styles.tagReportButton}
+                          >
+                            <Text style={styles.tagReportText}>Report link</Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
+
+                      {linkSummary.reason && linkSummary.canPreview ? null : linkSummary.reason ? (
+                        <Text style={styles.tagStatusText}>{linkSummary.reason}</Text>
                       ) : null}
                     </View>
-                    {statusCopy ? (
-                      <Text style={styles.tagStatusText}>{statusCopy}</Text>
-                    ) : null}
-                  </View>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -2273,6 +2412,14 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: "center",
   },
+  emptyFeedCopy: {
+    color: theme.color.inkSoft,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 8,
+    maxWidth: 240,
+    textAlign: "center",
+  },
   expandCopy: {
     color: "rgba(255,255,255,0.86)",
     fontSize: 9,
@@ -2291,6 +2438,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.pill,
     paddingHorizontal: 12,
     paddingVertical: 4,
+  },
+  creatorButtonDisabled: {
+    opacity: 0.72,
   },
   creatorButtonText: {
     color: theme.color.white,
@@ -2407,16 +2557,17 @@ const styles = StyleSheet.create({
     width: "100%",
     zIndex: 10,
   },
-  overlayLink: {
+  overlayButton: {
     backgroundColor: theme.color.white,
     borderRadius: theme.radius.pill,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  overlayButtonText: {
     color: theme.color.ink,
     fontSize: 14,
     fontWeight: "700",
-    marginTop: 8,
-    overflow: "hidden",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
   },
   placeholderText: {
     color: theme.color.shell,
@@ -2609,9 +2760,29 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-end",
   },
+  sheetCloseButton: {
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  sheetCloseText: {
+    color: theme.color.accentBright,
+    fontSize: 14,
+    fontWeight: "700",
+  },
   sheetEmpty: {
     color: theme.color.inkSoft,
     marginTop: 12,
+  },
+  sheetHeaderRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  sheetHeaderText: {
+    flex: 1,
+    paddingRight: 12,
   },
   sheetMessage: {
     color: theme.color.accentBright,
@@ -2624,6 +2795,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 26,
     maxHeight: "72%",
     padding: 18,
+  },
+  sheetScrollContent: {
+    paddingBottom: 10,
   },
   sheetScoreText: {
     color: theme.color.inkSoft,
@@ -2708,19 +2882,59 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
   },
-  tagMeta: {
-    color: theme.color.muted,
-    fontSize: 12,
-    marginTop: 2,
-  },
   tagActionRow: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 10,
   },
+  tagHeaderRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  tagLinkPill: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(234,47,35,0.08)",
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  tagLinkPillBlocked: {
+    backgroundColor: "rgba(234,47,35,0.15)",
+  },
+  tagLinkPillMuted: {
+    backgroundColor: "rgba(216,206,194,0.45)",
+  },
+  tagLinkPillText: {
+    color: theme.color.accentBright,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  tagLinkPillTextBlocked: {
+    color: theme.color.accentBright,
+  },
+  tagMetaChip: {
+    backgroundColor: "rgba(233,223,212,0.62)",
+    borderRadius: theme.radius.pill,
+    color: theme.color.inkSoft,
+    fontSize: 11,
+    fontWeight: "700",
+    overflow: "hidden",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    textTransform: "capitalize",
+  },
+  tagMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
   tagName: {
     color: theme.color.ink,
+    flex: 1,
     fontSize: 15,
     fontWeight: "700",
   },

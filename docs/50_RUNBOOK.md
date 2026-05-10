@@ -21,6 +21,52 @@
 5. Start the Expo dev server:
    `npm run start`
 
+## EAS Build / Update Lanes
+Redress uses explicit EAS channels so internal builds and TestFlight builds do not receive the same updates by accident.
+
+Current lanes in `eas.json`:
+- `development` build profile -> `development` channel
+- `preview` build profile -> `preview` channel
+- `production` build profile -> `production` channel
+
+Important:
+- The channel is baked into the native build at build time.
+- After changing channels in `eas.json`, make one new build for that profile before relying on EAS Update for that lane.
+- `app.json` uses `runtimeVersion.policy = "appVersion"`, so EAS Updates only apply to installed builds with the same app version.
+
+### Canonical release paths
+For internal iOS builds:
+- `npx eas build --platform ios --profile preview`
+
+For TestFlight:
+- `npx eas build --platform ios --profile production`
+- `npx eas submit --platform ios --latest`
+
+### EAS Update usage
+Use EAS Update only for JS/UI/logic fixes that do not require a new native binary.
+
+Good candidates:
+- screen copy or styling
+- feed logic
+- onboarding flow fixes
+- upload flow JS bugs
+
+Do not use EAS Update for:
+- native dependency changes
+- Expo plugin changes
+- `app.json` native-impacting changes
+- permission changes
+
+For current TestFlight users on the production lane, publish JS-only fixes with:
+- `eas update --channel production --environment production --message "Fix ..."`
+
+For internal preview testers:
+- `eas update --channel preview --message "Fix ..."`
+
+Notes:
+- Testers usually need to fully close and reopen the app before an update is applied.
+- If you accidentally publish to `preview`, production/TestFlight users should not receive that update.
+
 ## Supabase Migrations (Q2)
 1. Install Supabase CLI (one-time): `brew install supabase/tap/supabase`
 2. From project root, link/login as needed:
@@ -106,6 +152,18 @@ Google is optional in Q3 completion; email/password auth is required.
 The app now uses:
 - legacy bucket `videos` for older video uploads
 - bucket `media` for current photo and video uploads
+
+### Create-post image framing
+- Image post cropping uses the native `expo-image-picker` editing flow, which stays compatible with Expo Go, dev clients, and EAS builds.
+- No custom native module or special dev/TestFlight build is required just to use the crop flow.
+- Expected image flow:
+  1. Pick image
+  2. Crop the image in the native editor
+  3. Continue to caption and tags
+  4. Optionally open the full-post preview from the composer
+  5. Publish
+- The crop step uses a fixed `4:5` frame for image posts.
+- The edited image asset returned by the picker is used directly for upload, so feed/profile rendering stays consistent without extra client crop math.
 
 ### Via migration (recommended)
 1. Ensure these storage/media migrations are present:
@@ -205,6 +263,8 @@ select * from public.get_follow_counts('<profile-uuid>'::uuid);
 - Sign-out should return to auth screens.
 - Upload screen should allow selecting a video, uploading to Storage, creating a `video_posts` draft row, and playing preview from stored URL.
 - Upload screen should allow selecting a single photo or video, uploading to Storage, creating a `video_posts` draft row with the correct `media_type`, and previewing the selected asset from the stored/public URL.
+- Upload screen should allow opening a full-post preview that shows the current selected media, description, and item tags before publishing.
+- For image posts, the create-post flow should open the native crop step first and upload the returned cropped image without stretching in feed/profile.
 
 ### Session persistence check
 1. Sign in with email/password.
@@ -214,6 +274,9 @@ select * from public.get_follow_counts('<profile-uuid>'::uuid);
 5. Reopen the app.
 6. Confirm you are still signed in and routed back into the authenticated app.
 7. Open `Account` again and confirm `Session loaded` still shows `yes`.
+
+Note:
+- If a locally persisted Supabase refresh token becomes invalid after a backend reset or project switch, the client now clears the stale local session and falls back to signed-out state instead of remaining stuck on a broken token.
 
 ### No-anonymous-browsing check
 1. Sign out fully.

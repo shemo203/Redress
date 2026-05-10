@@ -13,6 +13,7 @@ Later behavior changes:
 - `supabase/migrations/20260423000400_launch_analytics_events.sql`
 - `supabase/migrations/20260423000500_feed_ranking_seen_posts.sql`
 - `supabase/migrations/20260423000600_media_posts_images.sql`
+- `supabase/migrations/20260509000100_delete_own_post_rpc.sql`
 
 ## Core Tables
 
@@ -171,24 +172,27 @@ Later behavior changes:
    - `video_posts.media_type check (media_type in ('video', 'image'))`
 4. Publish requires at least one clothing tag:
    - enforced by RPC `public.publish_post(post_id uuid)` before status flip
-5. URL safety (MVP rule):
+5. Owner post deletion for published posts:
+   - direct `delete` remains limited to drafts through RLS
+   - creators delete any of their own posts through RPC `public.delete_own_post(post_id uuid)`
+6. URL safety (MVP rule):
    - helper `public.is_http_url(text)` used by checks on `video_posts.video_url`, `clothing_tags.url`, and `outbound_clicks.url`
-6. Follow graph integrity:
+7. Follow graph integrity:
    - `follows unique(follower_id, followee_id)`
    - `follows check (follower_id <> followee_id)`
-7. Comment length guard:
+8. Comment length guard:
    - `comments.text check (char_length(trim(text)) between 1 and 500)`
-8. Privacy request shape:
+9. Privacy request shape:
    - `privacy_requests.request_type check (request_type in ('account_deletion', 'data_export'))`
    - `privacy_requests.status check (status in ('requested', 'fulfilled', 'declined'))`
    - `privacy_requests.details` max trimmed length `500`
-9. Report moderation state:
+10. Report moderation state:
    - `reports.review_status check (review_status in ('open', 'reviewed', 'resolved'))`
-10. Launch analytics session guards:
+11. Launch analytics session guards:
    - `app_opens unique(user_id, session_id)`
    - `post_impressions unique(post_id, user_id, session_id)`
    - `tag_reveals unique(post_id, user_id, session_id)`
-11. Watch analytics guard:
+12. Watch analytics guard:
    - `post_watches.watch_ms check (watch_ms >= 1000)`
 
 ## RLS Summary
@@ -231,7 +235,7 @@ RLS is enabled on:
 
 ### Authenticated writes
 - `grades`: direct insert allowed only when `user_id = auth.uid()` and post is published; authenticated users can also update their own grade on published posts, and the primary client edit flow uses `public.set_grade()`
-- `video_posts`: creators can create/update/delete only their own drafts (direct publish via normal `update` is blocked)
+- `video_posts`: creators can create/update/delete only their own drafts directly through RLS; published post deletion goes through `public.delete_own_post()`, and direct publish via normal `update` is blocked
 - `clothing_tags`: creators can insert/update/delete their own tags only on their own draft posts
 - `follows`: authenticated users can insert/delete only where `follower_id = auth.uid()`; direct row reads are limited to the current user's outgoing follows
 - `comments`: authenticated users can insert comments only as themselves on published posts; users can delete only their own comments

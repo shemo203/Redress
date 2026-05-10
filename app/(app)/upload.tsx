@@ -2,10 +2,14 @@ import * as ImagePicker from "expo-image-picker";
 import { Link } from "expo-router";
 import * as Sentry from "@sentry/react-native";
 import { VideoView, useVideoPlayer } from "expo-video";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
+  Alert,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,10 +22,24 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   REQUIRE_TAG_URLS,
   TAG_CATEGORY_OPTIONS,
-  theme,
   type TagCategory,
+  theme,
 } from "../../src/constants";
 import { useAuth } from "../../src/features/auth";
+import {
+  CreatePostPreviewModal,
+  createId,
+  createImagePostPickerOptions,
+  formatBytes,
+  getPublishFailureMessage,
+  inferExtension,
+  type MediaType,
+  type PendingTag,
+  type PickedMedia,
+  type SubmitMode,
+  type SubmitResult,
+  TagCard,
+} from "../../src/features/createPost";
 import { supabase } from "../../src/lib/supabaseClient";
 import { GlassButton, GlassCard } from "../../src/ui";
 import { validateClothingTagUrl } from "../../src/utils";
@@ -29,125 +47,10 @@ import { validateClothingTagUrl } from "../../src/utils";
 const MAX_VIDEO_BYTES = 250 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 
-type MediaType = "image" | "video";
-
-type PickedMedia = {
-  fileName: string | null;
-  fileSize: number | null;
-  mediaType: MediaType;
-  mimeType: string | null;
-  uri: string;
-};
-
-type PendingTag = {
-  brand: string;
-  category: TagCategory;
-  id: string;
-  name: string;
-  url: string;
-};
-
-type SubmitMode = "draft" | "published";
-
-type SubmitResult = {
-  message: string;
-  postId: string;
-  status: SubmitMode;
-};
-
-function formatBytes(value: number) {
-  if (value < 1024 * 1024) {
-    return `${(value / 1024).toFixed(1)} KB`;
-  }
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function inferExtension(media: PickedMedia) {
-  const source = media.fileName ?? media.uri;
-  const parts = source.split(".");
-  const last = parts[parts.length - 1];
-  if (!last || last.includes("/")) {
-    return media.mediaType === "image" ? "jpg" : "mp4";
-  }
-  return last.toLowerCase();
-}
-
-function createUuidLike() {
-  const randomHex = () =>
-    Math.floor((1 + Math.random()) * 0x10000)
-      .toString(16)
-      .slice(1);
-  return `${randomHex()}${randomHex()}-${randomHex()}-${randomHex()}-${randomHex()}-${randomHex()}${randomHex()}${randomHex()}`;
-}
-
-function createId() {
-  return globalThis.crypto?.randomUUID?.() ?? createUuidLike();
-}
-
-function getPublishFailureMessage(errorMessage: string) {
-  const message = errorMessage.toLowerCase();
-  if (
-    message.includes("not_post_owner") ||
-    message.includes("auth_required") ||
-    message.includes("permission")
-  ) {
-    return "Draft saved, but publish failed because this account is not allowed to publish it.";
-  }
-  if (message.includes("post_already_published")) {
-    return "This post was already published.";
-  }
-  return `Draft saved, but publish failed: ${errorMessage}`;
-}
-
-function getTagBadgeLabel(tag: PendingTag) {
-  const primary = tag.brand.trim() || tag.category;
-  return primary.length > 14 ? `${primary.slice(0, 13)}…` : primary;
-}
-
-function TagCard({
-  tag,
-  onDelete,
-  onEdit,
-}: {
-  onDelete: (tagId: string) => void;
-  onEdit: (tag: PendingTag) => void;
-  tag: PendingTag;
-}) {
-  return (
-    <GlassCard onPress={() => onEdit(tag)} style={styles.itemCard}>
-      <View style={styles.itemThumb}>
-        <Text style={styles.itemThumbText}>{tag.name.trim().charAt(0).toUpperCase()}</Text>
-      </View>
-
-      <View style={styles.itemBody}>
-        <Text numberOfLines={1} style={styles.itemName}>
-          {tag.name}
-        </Text>
-        <Text numberOfLines={1} style={styles.itemBrand}>
-          @{getTagBadgeLabel(tag)}
-        </Text>
-        <Text numberOfLines={1} style={styles.itemCategory}>
-          {tag.category}
-        </Text>
-      </View>
-
-      <Pressable
-        hitSlop={10}
-        onPress={(event) => {
-          event.stopPropagation();
-          onDelete(tag.id);
-        }}
-        style={({ pressed }) => [styles.itemDelete, pressed ? styles.pressed : undefined]}
-      >
-        <Text style={styles.itemDeleteText}>×</Text>
-      </Pressable>
-    </GlassCard>
-  );
-}
-
 export default function UploadScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const tagComposerScrollRef = useRef<ScrollView | null>(null);
 
   const [caption, setCaption] = useState("");
   const [pickedMedia, setPickedMedia] = useState<PickedMedia | null>(null);
@@ -161,6 +64,9 @@ export default function UploadScreen() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [submitMode, setSubmitMode] = useState<SubmitMode | null>(null);
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  const [isCaptionFocused, setIsCaptionFocused] = useState(false);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+  const [isTagUrlFocused, setIsTagUrlFocused] = useState(false);
 
   const previewPlayer = useVideoPlayer(
     pickedMedia?.mediaType === "video" ? pickedMedia.uri : null,
@@ -179,12 +85,15 @@ export default function UploadScreen() {
   };
 
   const closeTagComposer = () => {
+    Keyboard.dismiss();
+    setIsTagUrlFocused(false);
     setIsTagModalVisible(false);
     resetTagForm();
   };
 
   const resetComposer = () => {
     setCaption("");
+    setIsPreviewVisible(false);
     setPickedMedia(null);
     setTags([]);
     closeTagComposer();
@@ -206,7 +115,7 @@ export default function UploadScreen() {
     setIsTagModalVisible(true);
   };
 
-  const pickMedia = async () => {
+  const pickMedia = async (requestedMediaType: MediaType) => {
     setStatusMessage(null);
     setSubmitResult(null);
 
@@ -216,11 +125,14 @@ export default function UploadScreen() {
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: false,
-      mediaTypes: ["images", "videos"],
-      quality: 1,
-    });
+    const result =
+      requestedMediaType === "image"
+        ? await ImagePicker.launchImageLibraryAsync(createImagePostPickerOptions())
+        : await ImagePicker.launchImageLibraryAsync({
+            allowsEditing: false,
+            mediaTypes: ["videos"],
+            quality: 1,
+          });
 
     if (result.canceled) {
       return;
@@ -243,10 +155,8 @@ export default function UploadScreen() {
       setStatusMessage(
         `Selected file is too large (${formatBytes(asset.fileSize)}). Please choose a smaller ${mediaType}.`
       );
-      setPickedMedia(null);
       return;
     }
-
     setPickedMedia({
       fileName: asset.fileName ?? null,
       fileSize: asset.fileSize ?? null,
@@ -255,8 +165,31 @@ export default function UploadScreen() {
       uri: asset.uri,
     });
     setStatusMessage(
-      `${mediaType === "image" ? "Photo" : "Video"} selected. Add at least one item to publish.`
+      mediaType === "image"
+        ? "Photo cropped and ready. Add at least one item to publish."
+        : "Video selected. Add at least one item to publish."
     );
+  };
+
+  const openMediaPicker = () => {
+    Alert.alert("Choose media", "Photos can be cropped before upload.", [
+      {
+        text: "Photo",
+        onPress: () => {
+          void pickMedia("image");
+        },
+      },
+      {
+        text: "Video",
+        onPress: () => {
+          void pickMedia("video");
+        },
+      },
+      {
+        style: "cancel",
+        text: "Cancel",
+      },
+    ]);
   };
 
   const saveTag = () => {
@@ -466,14 +399,22 @@ export default function UploadScreen() {
   const canSaveDraft = Boolean(pickedMedia) && submitMode === null && !isTagModalVisible;
   const canPublish =
     Boolean(pickedMedia) && tags.length > 0 && submitMode === null && !isTagModalVisible;
+  const canPreview = Boolean(pickedMedia) && !isTagModalVisible;
   const publishHint = !pickedMedia
     ? "Choose a photo or video to start"
     : tags.length === 0
       ? "Tag at least one item to publish"
       : "Ready to publish";
+  const previewItems = tags.map((tag) => ({
+    id: tag.id,
+    label: tag.brand.trim() ? `${tag.name} · ${tag.brand.trim()}` : tag.name,
+  }));
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.screen}
+    >
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
@@ -483,6 +424,8 @@ export default function UploadScreen() {
             paddingTop: Math.max(insets.top + 14, 24),
           },
         ]}
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -502,11 +445,11 @@ export default function UploadScreen() {
           </GlassButton>
         </View>
 
-        <GlassCard onPress={pickMedia} style={styles.previewCard}>
+        <GlassCard onPress={openMediaPicker} style={styles.previewCard}>
           {pickedMedia ? (
             <>
               {pickedMedia.mediaType === "image" ? (
-                <Image source={{ uri: pickedMedia.uri }} style={styles.previewMedia} />
+                <Image resizeMode="cover" source={{ uri: pickedMedia.uri }} style={styles.previewMedia} />
               ) : (
                 <VideoView
                   contentFit="cover"
@@ -531,18 +474,66 @@ export default function UploadScreen() {
                 <Text style={styles.previewBadgePlus}>+</Text>
               </View>
               <Text style={styles.previewEmptyTitle}>Choose your cover media</Text>
-              <Text style={styles.previewEmptyCopy}>Photo or video, styled the same way it will feel in feed.</Text>
+              <Text style={styles.previewEmptyCopy}>
+                Pick a photo or video. Photos open a quick crop step before upload.
+              </Text>
             </View>
           )}
         </GlassCard>
 
+        {pickedMedia ? (
+          <View style={styles.previewActionsRow}>
+            <GlassButton
+              disabled={!canPreview}
+              minHeight={46}
+              onPress={() => setIsPreviewVisible(true)}
+              style={styles.previewActionButton}
+              textStyle={styles.previewActionText}
+              variant="soft"
+            >
+              Preview post
+            </GlassButton>
+            <GlassButton
+              minHeight={46}
+              onPress={openMediaPicker}
+              style={styles.previewActionButton}
+              textStyle={styles.previewActionText}
+              variant="soft"
+            >
+              Replace media
+            </GlassButton>
+          </View>
+        ) : null}
+
         <GlassCard style={styles.captionCard}>
+          <View style={styles.captionHeader}>
+            <Text style={styles.captionLabel}>Description</Text>
+            {isCaptionFocused ? (
+              <Pressable
+                onPress={() => {
+                  setIsCaptionFocused(false);
+                  Keyboard.dismiss();
+                }}
+                style={({ pressed }) => [styles.captionDoneButton, pressed ? styles.pressed : undefined]}
+              >
+                <Text style={styles.captionDoneText}>Done</Text>
+              </Pressable>
+            ) : null}
+          </View>
           <TextInput
             multiline
             onChangeText={setCaption}
+            onBlur={() => setIsCaptionFocused(false)}
+            onFocus={() => setIsCaptionFocused(true)}
+            onSubmitEditing={() => {
+              setIsCaptionFocused(false);
+              Keyboard.dismiss();
+            }}
             placeholder="Describe your look..."
             placeholderTextColor={theme.color.warmGold}
+            returnKeyType="done"
             style={styles.captionInput}
+            submitBehavior="blurAndSubmit"
             textAlignVertical="top"
             value={caption}
           />
@@ -618,33 +609,49 @@ export default function UploadScreen() {
         ) : null}
       </ScrollView>
 
+      <CreatePostPreviewModal
+        caption={caption}
+        items={previewItems}
+        media={pickedMedia ? { mediaType: pickedMedia.mediaType, uri: pickedMedia.uri } : null}
+        onClose={() => setIsPreviewVisible(false)}
+        visible={isPreviewVisible}
+      />
+
       <Modal
         animationType="fade"
         transparent
         visible={isTagModalVisible}
         onRequestClose={closeTagComposer}
       >
-        <Pressable style={styles.modalBackdrop} onPress={closeTagComposer}>
-          <Pressable
-            onPress={(event) => event.stopPropagation()}
-            style={[
-              styles.modalPanel,
-              { paddingBottom: Math.max(insets.bottom + 16, 24) },
-            ]}
-          >
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>
-              {editingTagId ? "Edit item" : "Add item"}
-            </Text>
-            <Text style={styles.modalCopy}>
-              Keep it simple: name, brand, category, and an optional safe link.
-            </Text>
-
-            <ScrollView
-              contentContainerStyle={styles.modalContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalKeyboardRoot}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={closeTagComposer}>
+            <Pressable
+              onPress={(event) => event.stopPropagation()}
+              style={[
+                styles.modalPanel,
+                { paddingBottom: Math.max(insets.bottom + 16, 24) },
+              ]}
             >
+              <View style={styles.modalHandle} />
+              <Text style={styles.modalTitle}>
+                {editingTagId ? "Edit item" : "Add item"}
+              </Text>
+              <Text style={styles.modalCopy}>
+                Keep it simple: name, brand, category, and an optional safe link.
+              </Text>
+
+              <ScrollView
+                ref={tagComposerScrollRef}
+                automaticallyAdjustKeyboardInsets
+                contentContainerStyle={styles.modalContent}
+                keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+                keyboardShouldPersistTaps="handled"
+                onScrollBeginDrag={Keyboard.dismiss}
+                showsVerticalScrollIndicator={false}
+              >
               <GlassCard style={styles.fieldCard}>
                 <Text style={styles.fieldLabel}>Name</Text>
                 <TextInput
@@ -694,14 +701,41 @@ export default function UploadScreen() {
               </GlassCard>
 
               <GlassCard style={styles.fieldCard}>
-                <Text style={styles.fieldLabel}>
-                  {REQUIRE_TAG_URLS ? "Link" : "Link (optional)"}
-                </Text>
+                <View style={styles.fieldHeader}>
+                  <Text style={styles.fieldLabel}>
+                    {REQUIRE_TAG_URLS ? "Link" : "Link (optional)"}
+                  </Text>
+                  {isTagUrlFocused ? (
+                    <Pressable
+                      onPress={() => {
+                        setIsTagUrlFocused(false);
+                        Keyboard.dismiss();
+                      }}
+                      style={({ pressed }) => [styles.fieldDoneButton, pressed ? styles.pressed : undefined]}
+                    >
+                      <Text style={styles.fieldDoneText}>Done</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
                 <TextInput
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
                   onChangeText={setTagUrl}
+                  onBlur={() => setIsTagUrlFocused(false)}
+                  onFocus={() => {
+                    setIsTagUrlFocused(true);
+                    requestAnimationFrame(() => {
+                      tagComposerScrollRef.current?.scrollToEnd({ animated: true });
+                    });
+                  }}
+                  onSubmitEditing={() => {
+                    setIsTagUrlFocused(false);
+                    Keyboard.dismiss();
+                  }}
                   placeholder="https://..."
                   placeholderTextColor={theme.color.warmGold}
+                  returnKeyType="done"
                   style={styles.fieldInput}
                   value={tagUrl}
                 />
@@ -711,31 +745,32 @@ export default function UploadScreen() {
                     : "Leave empty to keep the tag non-clickable."}
                 </Text>
               </GlassCard>
-            </ScrollView>
+              </ScrollView>
 
-            <View style={styles.modalActions}>
-              <GlassButton
-                minHeight={50}
-                onPress={closeTagComposer}
-                style={styles.modalAction}
-                textStyle={styles.modalSecondaryText}
-                variant="soft"
-              >
-                Cancel
-              </GlassButton>
-              <GlassButton
-                minHeight={50}
-                onPress={saveTag}
-                style={styles.modalAction}
-                variant="cream"
-              >
-                {editingTagId ? "Save item" : "Add item"}
-              </GlassButton>
-            </View>
+              <View style={styles.modalActions}>
+                <GlassButton
+                  minHeight={50}
+                  onPress={closeTagComposer}
+                  style={styles.modalAction}
+                  textStyle={styles.modalSecondaryText}
+                  variant="soft"
+                >
+                  Cancel
+                </GlassButton>
+                <GlassButton
+                  minHeight={50}
+                  onPress={saveTag}
+                  style={styles.modalAction}
+                  variant="cream"
+                >
+                  {editingTagId ? "Save item" : "Add item"}
+                </GlassButton>
+              </View>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -770,12 +805,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 18,
   },
+  captionDoneButton: {
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  captionDoneText: {
+    color: theme.color.warmGold,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  captionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
   captionInput: {
     color: theme.color.sepia,
     fontSize: 18,
     lineHeight: 26,
     minHeight: 72,
     padding: 0,
+  },
+  captionLabel: {
+    color: theme.color.inkSoft,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
   },
   categoryButton: {
     backgroundColor: "rgba(255,249,243,0.78)",
@@ -824,6 +882,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
+  fieldDoneButton: {
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  fieldDoneText: {
+    color: theme.color.warmGold,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  fieldHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
   fieldHint: {
     color: theme.color.muted,
     fontSize: 12,
@@ -859,65 +932,8 @@ const styles = StyleSheet.create({
     paddingRight: 8,
     textAlign: "left",
   },
-  itemBody: {
-    flex: 1,
-    justifyContent: "center",
-    marginLeft: 12,
-  },
-  itemBrand: {
-    color: theme.color.inkSoft,
-    fontSize: 13,
-    marginTop: 4,
-  },
-  itemCard: {
-    alignItems: "center",
-    flexDirection: "row",
-    minHeight: 88,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
   itemCardWrap: {
     width: "48.4%",
-  },
-  itemCategory: {
-    color: theme.color.muted,
-    fontSize: 12,
-    marginTop: 4,
-    textTransform: "capitalize",
-  },
-  itemDelete: {
-    alignItems: "center",
-    borderRadius: 16,
-    height: 28,
-    justifyContent: "center",
-    marginLeft: 10,
-    width: 28,
-  },
-  itemDeleteText: {
-    color: theme.color.warmGold,
-    fontSize: 24,
-    fontWeight: "300",
-    marginTop: -3,
-  },
-  itemName: {
-    color: theme.color.ink,
-    fontFamily: "serif",
-    fontSize: 17,
-    fontWeight: "700",
-  },
-  itemThumb: {
-    alignItems: "center",
-    backgroundColor: "rgba(232,221,208,0.88)",
-    borderRadius: 18,
-    height: 54,
-    justifyContent: "center",
-    width: 54,
-  },
-  itemThumbText: {
-    color: theme.color.sepia,
-    fontFamily: "serif",
-    fontSize: 20,
-    fontWeight: "700",
   },
   itemsSection: {
     marginTop: 22,
@@ -957,6 +973,10 @@ const styles = StyleSheet.create({
     height: 6,
     marginBottom: 10,
     width: 70,
+  },
+  modalKeyboardRoot: {
+    flex: 1,
+    justifyContent: "flex-end",
   },
   modalPanel: {
     backgroundColor: theme.color.shell,
@@ -999,6 +1019,20 @@ const styles = StyleSheet.create({
     minHeight: 318,
     overflow: "hidden",
     padding: 0,
+  },
+  previewActionButton: {
+    flex: 1,
+  },
+  previewActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+  },
+  previewActionText: {
+    color: theme.color.sepia,
+    fontFamily: "System",
+    fontSize: 14,
+    fontWeight: "700",
   },
   previewEmptyCopy: {
     color: theme.color.inkSoft,
