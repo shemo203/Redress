@@ -66,6 +66,15 @@ export default function SearchScreen() {
     };
   }, [query]);
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/(app)");
+  };
+
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
@@ -73,12 +82,12 @@ export default function SearchScreen() {
         styles.container,
         {
           paddingBottom: Math.max(insets.bottom + 120, 144),
-          paddingTop: Math.max(insets.top + 12, 28),
+          paddingTop: Math.max(insets.top + 8, 20),
         },
       ]}
     >
       <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()} style={styles.headerButton}>
+        <Pressable onPress={handleBack} style={styles.headerButton}>
           <Text style={styles.headerButtonText}>Back</Text>
         </Pressable>
 
@@ -145,7 +154,7 @@ export default function SearchScreen() {
               <Pressable style={styles.resultRow}>
                 <ProfileAvatar
                   avatarUrl={result.avatar_url}
-                  size={58}
+                  size={50}
                   username={result.username}
                 />
                 <View style={styles.resultMeta}>
@@ -165,9 +174,9 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: theme.color.shell,
+    backgroundColor: theme.color.cream,
     flexGrow: 1,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
   },
   headerButton: {
     alignItems: "center",
@@ -176,91 +185,92 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.pill,
     borderWidth: 1,
     justifyContent: "center",
-    minWidth: 78,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    minWidth: 68,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   headerButtonText: {
     color: theme.color.ink,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 18,
+    marginBottom: 14,
   },
   input: {
     backgroundColor: "rgba(255,249,243,0.92)",
     borderColor: "rgba(216,206,194,0.88)",
-    borderRadius: 22,
+    borderRadius: 18,
     borderWidth: 1,
     color: theme.color.ink,
-    fontSize: 16,
-    marginTop: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    fontSize: 15,
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
   },
   resultBio: {
     color: theme.color.inkSoft,
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 4,
+    fontSize: 12.5,
+    lineHeight: 17,
+    marginTop: 3,
   },
   resultMeta: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: 12,
   },
   resultRow: {
     alignItems: "center",
     flexDirection: "row",
-    paddingVertical: 14,
+    paddingVertical: 11,
   },
   resultsCard: {
     backgroundColor: "rgba(255,249,243,0.88)",
     borderColor: "rgba(216,206,194,0.88)",
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
-    marginTop: 18,
-    paddingHorizontal: 14,
+    marginTop: 14,
+    paddingHorizontal: 12,
   },
   resultUsername: {
     color: theme.color.ink,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
   },
   stateCard: {
     alignItems: "center",
     backgroundColor: "rgba(255,249,243,0.88)",
     borderColor: "rgba(216,206,194,0.88)",
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
-    marginTop: 18,
-    padding: 24,
+    marginTop: 14,
+    padding: 20,
   },
   stateText: {
     color: theme.color.inkSoft,
-    lineHeight: 22,
-    marginTop: 10,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 8,
     textAlign: "center",
   },
   stateTitle: {
     color: theme.color.ink,
     fontFamily: "serif",
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: "700",
     textAlign: "center",
   },
   subtitle: {
     color: theme.color.inkSoft,
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 6,
   },
   title: {
     color: theme.color.ink,
     fontFamily: "serif",
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "700",
   },
 });

@@ -164,7 +164,7 @@ The app now uses:
   3. Continue to caption and tags
   4. Optionally open the full-post preview from the composer
   5. Publish
-- The crop step uses a fixed `4:5` frame for image posts.
+- The crop step uses a fixed `3:4` frame for image posts.
 - The edited image asset returned by the picker is used directly for upload, so feed/profile rendering stays consistent without extra client crop math.
 
 ### Via migration (recommended)

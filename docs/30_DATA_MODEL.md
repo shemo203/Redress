@@ -267,7 +267,7 @@ RLS is enabled on:
   - `today`
   - `week`
   - `all`
-- returns only published posts with at least one grade in the selected grade window
+- returns only published posts with at least `3` grades in the selected grade window
 - returns:
   - `rank`
   - `post_id`
@@ -286,12 +286,14 @@ RLS is enabled on:
   2. `grade_count desc`
   3. `published_at desc`
 - `today` and `week` are based on grades created inside the selected period; `all` uses all grades
+- the minimum leaderboard eligibility threshold is `3` grades
 - runs as `security definer`; execute granted to `authenticated` only
 
 ## RPC: get_my_best_ranked_post(period text)
 `public.get_my_best_ranked_post(period text)`:
 - requires authentication
 - uses the same ranking window and ordering as `public.get_top_posts(...)`
+- only returns a post when that creator has a leaderboard-eligible post with at least `3` grades in the selected period
 - returns the signed-in creator's highest-ranked published post for the requested period, if one exists
 - returns the same leaderboard row shape as `public.get_top_posts(...)`
 - returns no rows when the creator has no ranked post in that period

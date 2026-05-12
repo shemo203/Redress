@@ -70,6 +70,7 @@ import { validateClothingTagUrl } from "../../src/utils";
 
 const clothingTagIcon = require("../../assets/PNGGG.png PNGGGG.png");
 const PAGE_SIZE = 8;
+const CREATOR_FEED_INITIAL_PAGE_SIZE = 24;
 
 type ReportDraft = {
   initialDetails?: string;
@@ -324,9 +325,16 @@ function CommentsSheet({
           style={styles.commentsBackdrop}
           onPress={() => {
             Keyboard.dismiss();
+            onClose();
           }}
         >
-          <Pressable style={styles.commentsPreviewWrap} onPress={() => {}}>
+          <Pressable
+            style={styles.commentsPreviewWrap}
+            onPress={() => {
+              Keyboard.dismiss();
+              onClose();
+            }}
+          >
             {post ? (
               <View style={styles.commentsPreviewCard}>
                 {post.media_type === "image" ? (
@@ -369,7 +377,7 @@ function CommentsSheet({
                 }}
                 style={styles.commentsCloseButton}
               >
-                <Text style={styles.commentsCloseText}>Done</Text>
+                <Text style={styles.commentsCloseText}>Close</Text>
               </Pressable>
             </View>
 
@@ -474,11 +482,14 @@ function CommentsSheet({
 
 export default function FeedScreen() {
   const router = useRouter();
-  const { postId: requestedPostIdParam } = useLocalSearchParams<{ postId?: string }>();
+  const { creatorId: requestedCreatorIdParam, postId: requestedPostIdParam } =
+    useLocalSearchParams<{ creatorId?: string; postId?: string }>();
   const { profile, user } = useAuth();
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const cardHeight = Math.max(height, 560);
+  const requestedCreatorId =
+    typeof requestedCreatorIdParam === "string" ? requestedCreatorIdParam : null;
   const requestedPostId =
     typeof requestedPostIdParam === "string" ? requestedPostIdParam : null;
 
@@ -949,16 +960,43 @@ export default function FeedScreen() {
         };
       };
 
+      const fetchCreatorPosts = async (offset: number, limit: number) => {
+        const { data, error } = await supabase
+          .from("video_posts")
+          .select("id, caption, video_url, media_type, created_at, creator_id")
+          .eq("creator_id", requestedCreatorId)
+          .eq("status", "published")
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        return {
+          error,
+          rows: (data ?? []) as FeedPostSourceRow[],
+        };
+      };
+
       const excludePostIds = reset ? [] : posts.map((post) => post.id);
+      const creatorFeedLimit = reset ? CREATOR_FEED_INITIAL_PAGE_SIZE : PAGE_SIZE;
       let recycleBatch = false;
-      let { error: postsError, rows: rawPosts } = await fetchRankedPosts(excludePostIds);
+      let postsError: { message: string } | null = null;
+      let rawPosts: FeedPostSourceRow[] = [];
+
+      if (requestedCreatorId) {
+        const creatorResult = await fetchCreatorPosts(reset ? 0 : posts.length, creatorFeedLimit);
+        postsError = creatorResult.error;
+        rawPosts = creatorResult.rows;
+      } else {
+        const rankedResult = await fetchRankedPosts(excludePostIds);
+        postsError = rankedResult.error;
+        rawPosts = rankedResult.rows;
+      }
 
       if (postsError) {
         setFeedMessage(`Failed to load feed: ${postsError.message}`);
         return;
       }
 
-      if (!reset && rawPosts.length === 0 && posts.length > 0) {
+      if (!requestedCreatorId && !reset && rawPosts.length === 0 && posts.length > 0) {
         recycleBatch = true;
         const recycleExcludeIds = activePost?.id ? [activePost.id] : [];
         const recycleResult = await fetchRankedPosts(recycleExcludeIds);
@@ -999,7 +1037,9 @@ export default function FeedScreen() {
         return [...current, ...deduped];
       });
 
-      setHasMore(mappedPosts.length > 0);
+      setHasMore(
+        requestedCreatorId ? rawPosts.length === creatorFeedLimit : mappedPosts.length > 0
+      );
 
       const knownIds = reset ? [] : posts.map((post) => post.id);
       const mergedIds = Array.from(
@@ -1057,7 +1097,7 @@ export default function FeedScreen() {
       return;
     }
     void loadPosts(true, "initial");
-  }, [requestedPostId, user?.id]);
+  }, [requestedCreatorId, requestedPostId, user?.id]);
 
   useEffect(() => {
     return subscribeToAppDockRetap("feed", () => {
@@ -1092,7 +1132,7 @@ export default function FeedScreen() {
   useEffect(() => {
     requestedPostFetchRef.current = null;
     requestedPostFocusedRef.current = null;
-  }, [requestedPostId]);
+  }, [requestedCreatorId, requestedPostId]);
 
   useEffect(() => {
     if (!requestedPostId || !user?.id) {
@@ -2694,7 +2734,7 @@ const styles = StyleSheet.create({
   },
   scoreCard: {
     alignItems: "center",
-    bottom: 98,
+    bottom: 84,
     backgroundColor: "rgba(203, 180, 154, 0.58)",
     borderColor: "rgba(255,255,255,0.20)",
     borderRadius: 18,
@@ -2729,7 +2769,7 @@ const styles = StyleSheet.create({
     lineHeight: 36,
   },
   screen: {
-    backgroundColor: "#d8c8b8",
+    backgroundColor: theme.color.cream,
     flex: 1,
   },
   sheetBackdrop: {
@@ -2798,7 +2838,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.18)",
     borderRadius: 20,
     borderWidth: 1,
-    bottom: 98,
+    bottom: 84,
     flexDirection: "row",
     left: 16,
     minHeight: 48,

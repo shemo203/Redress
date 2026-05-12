@@ -46,27 +46,27 @@ export function TopListRow({ entry, isLast = false, onPress }: TopListRowProps) 
 const styles = StyleSheet.create({
   chevron: {
     color: "rgba(140,120,110,0.85)",
-    fontSize: 34,
-    lineHeight: 34,
-    marginLeft: 8,
+    fontSize: 28,
+    lineHeight: 28,
+    marginLeft: 6,
   },
   meta: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: 12,
   },
   rank: {
     color: theme.color.sepia,
-    fontSize: 21,
+    fontSize: 19,
     fontWeight: "600",
-    marginRight: 12,
+    marginRight: 10,
     minWidth: 22,
     textAlign: "center",
   },
   row: {
     alignItems: "center",
     flexDirection: "row",
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
   },
   rowDivider: {
     borderBottomColor: "rgba(216,206,194,0.82)",
@@ -74,26 +74,26 @@ const styles = StyleSheet.create({
   },
   score: {
     color: theme.color.sepia,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
     textAlign: "right",
   },
   scoreWrap: {
-    minWidth: 72,
+    minWidth: 66,
   },
   subtle: {
     color: theme.color.inkSoft,
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 11.5,
+    marginTop: 3,
   },
   thumbnail: {
-    borderRadius: 16,
-    height: 58,
-    width: 58,
+    borderRadius: 14,
+    height: 50,
+    width: 50,
   },
   username: {
     color: theme.color.sepia,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "700",
   },
 });

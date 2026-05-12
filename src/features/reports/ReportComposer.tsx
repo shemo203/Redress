@@ -41,8 +41,6 @@ export function ReportComposer({
   visible,
 }: ReportComposerProps) {
   const [details, setDetails] = useState(initialDetails);
-  const [isDetailsFocused, setIsDetailsFocused] = useState(false);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [reason, setReason] = useState<ReportReason | null>(null);
 
   useEffect(() => {
@@ -51,24 +49,8 @@ export function ReportComposer({
     }
 
     setDetails(initialDetails);
-    setIsDetailsFocused(false);
     setReason(null);
   }, [initialDetails, visible]);
-
-  useEffect(() => {
-    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
-      setIsKeyboardVisible(true);
-    });
-    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
-      setIsKeyboardVisible(false);
-      setIsDetailsFocused(false);
-    });
-
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
 
   return (
     <Modal
@@ -84,10 +66,7 @@ export function ReportComposer({
         <Pressable
           style={styles.backdrop}
           onPress={() => {
-            if (isKeyboardVisible) {
-              Keyboard.dismiss();
-              return;
-            }
+            Keyboard.dismiss();
             onClose();
           }}
         >
@@ -99,17 +78,12 @@ export function ReportComposer({
               </View>
               <Pressable
                 onPress={() => {
-                  if (isDetailsFocused) {
-                    Keyboard.dismiss();
-                    return;
-                  }
+                  Keyboard.dismiss();
                   onClose();
                 }}
                 style={styles.headerAction}
               >
-                <Text style={styles.headerActionText}>
-                  {isDetailsFocused ? "Done" : "Close"}
-                </Text>
+                <Text style={styles.headerActionText}>Close</Text>
               </Pressable>
             </View>
 
@@ -150,13 +124,8 @@ export function ReportComposer({
                 editable={!isSubmitting}
                 maxLength={REPORT_DETAILS_MAX_LENGTH}
                 multiline
-                onBlur={() => setIsDetailsFocused(false)}
                 onChangeText={setDetails}
-                onFocus={() => setIsDetailsFocused(true)}
-                onSubmitEditing={() => {
-                  setIsDetailsFocused(false);
-                  Keyboard.dismiss();
-                }}
+                onSubmitEditing={Keyboard.dismiss}
                 placeholder="Optional details"
                 placeholderTextColor={theme.color.muted}
                 returnKeyType="done"

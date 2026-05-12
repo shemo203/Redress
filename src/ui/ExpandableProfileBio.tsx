@@ -45,14 +45,17 @@ export function ExpandableProfileBio({
   return (
     <View style={styles.wrap}>
       {!didMeasure ? (
-        <Text
+        <View
           accessibilityElementsHidden
+          collapsable={false}
           importantForAccessibility="no-hide-descendants"
-          onTextLayout={handleMeasure}
-          style={[textStyle, styles.measureText]}
+          pointerEvents="none"
+          style={styles.measureWrap}
         >
-          {text}
-        </Text>
+          <Text onTextLayout={handleMeasure} style={textStyle}>
+            {text}
+          </Text>
+        </View>
       ) : null}
 
       <Text numberOfLines={expanded ? undefined : collapsedLines} style={textStyle}>
@@ -73,13 +76,14 @@ export function ExpandableProfileBio({
 }
 
 const styles = StyleSheet.create({
-  measureText: {
+  measureWrap: {
+    alignItems: "center",
     left: 0,
     opacity: 0,
     position: "absolute",
     right: 0,
     top: 0,
-    zIndex: -1,
+    width: "100%",
   },
   pressed: {
     opacity: 0.78,

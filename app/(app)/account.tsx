@@ -3,7 +3,6 @@ import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -69,6 +68,9 @@ type FitPreview = {
 };
 
 const PROFILE_BIO_MAX_LENGTH = 160;
+const HERO_MIN_HEIGHT = 220;
+const HERO_MAX_HEIGHT = 280;
+const HERO_HEIGHT_RATIO = 0.28;
 
 function formatUsername(raw: string | null | undefined) {
   if (raw && raw.trim().length > 0) {
@@ -135,7 +137,6 @@ export default function AccountScreen() {
   const router = useRouter();
   const { profile, refreshProfile, user } = useAuth();
   const accountScrollRef = useRef<ScrollView | null>(null);
-  const editProfileScrollRef = useRef<ScrollView | null>(null);
 
   const [accountCounts, setAccountCounts] = useState<FollowCounts | null>(null);
   const [accountProfile, setAccountProfile] = useState<AccountProfile | null>(null);
@@ -143,7 +144,6 @@ export default function AccountScreen() {
   const [editProfileBio, setEditProfileBio] = useState("");
   const [editProfileMessage, setEditProfileMessage] = useState<string | null>(null);
   const [editProfileVisible, setEditProfileVisible] = useState(false);
-  const [isEditProfileBioFocused, setIsEditProfileBioFocused] = useState(false);
   const [selectedAvatarAsset, setSelectedAvatarAsset] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -397,11 +397,12 @@ export default function AccountScreen() {
   const displayUsername = formatUsername(profile?.username ?? user?.email?.split("@")[0]);
   const resolvedUsername = accountProfile?.username ?? displayUsername;
   const displayName = formatDisplayName(resolvedUsername);
-  const profileBio =
-    accountProfile?.bio?.trim() ||
-    "Curating conscious style | Based in Stockholm | Lover of linen and vintage finds";
+  const profileBio = accountProfile?.bio?.trim() ?? "";
   const canReviewReports = isModerationAdminUser(user?.id);
-  const heroHeight = Math.max(250, Math.min(320, Math.round(screenHeight * 0.31)));
+  const heroHeight = Math.max(
+    HERO_MIN_HEIGHT,
+    Math.min(HERO_MAX_HEIGHT, Math.round(screenHeight * HERO_HEIGHT_RATIO))
+  );
 
   const handleShareProfile = async () => {
     try {
@@ -421,7 +422,6 @@ export default function AccountScreen() {
     setEditProfileBio(accountProfile?.bio?.trim() ?? "");
     setSelectedAvatarAsset(null);
     setEditProfileMessage(null);
-    setIsEditProfileBioFocused(false);
     setEditProfileVisible(true);
   };
 
@@ -555,7 +555,7 @@ export default function AccountScreen() {
           styles.container,
           {
             paddingBottom: Math.max(insets.bottom + 112, 132),
-            paddingTop: Math.max(insets.top + 10, 24),
+            paddingTop: Math.max(insets.top + 8, 18),
           },
         ]}
         keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
@@ -564,48 +564,26 @@ export default function AccountScreen() {
       >
         <View style={styles.topBar}>
           <View style={styles.topBarActions}>
-            <Link asChild href="/(app)/search">
-              <Pressable style={styles.topBarButton}>
-                <Text style={styles.topBarButtonText}>Search</Text>
-              </Pressable>
-            </Link>
-
             <Pressable onPress={() => setMenuVisible(true)} style={styles.topBarMenuButton}>
               <Text style={styles.topBarMenuText}>☰</Text>
             </Pressable>
           </View>
         </View>
 
-        <View
-          pointerEvents="none"
-          style={[styles.heroGlow, styles.heroGlowPrimary]}
-        />
-        <View
-          pointerEvents="none"
-          style={[styles.heroGlow, styles.heroGlowSecondary]}
-        />
-
         <View style={[styles.profileHero, { minHeight: heroHeight }]}>
-          {accountProfile?.avatar_url ?? profile?.avatar_url ? (
-            <Image
-              resizeMode="cover"
-              source={{ uri: accountProfile?.avatar_url ?? profile?.avatar_url ?? "" }}
-              style={styles.ghostPortrait}
-            />
-          ) : null}
-          <View style={styles.ghostOverlay} />
-
           <View style={styles.avatarRing}>
             <ProfileAvatar
               avatarUrl={accountProfile?.avatar_url ?? profile?.avatar_url}
-              size={114}
+              size={96}
               username={resolvedUsername}
             />
           </View>
 
           <Text style={styles.profileName}>{displayName}</Text>
           <Text style={styles.profileHandle}>@{resolvedUsername}</Text>
-          <ExpandableProfileBio text={profileBio} textStyle={styles.profileBio} />
+          {profileBio ? (
+            <ExpandableProfileBio text={profileBio} textStyle={styles.profileBio} />
+          ) : null}
 
           <View style={styles.heroStatsRow}>
             <View style={styles.heroStat}>
@@ -828,7 +806,6 @@ export default function AccountScreen() {
               </View>
 
               <ScrollView
-                ref={editProfileScrollRef}
                 automaticallyAdjustKeyboardInsets
                 contentContainerStyle={styles.sheetContent}
                 keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
@@ -840,7 +817,7 @@ export default function AccountScreen() {
                   <View style={styles.editProfileAvatarWrap}>
                     <ProfileAvatar
                       avatarUrl={editProfileAvatarUri}
-                      size={112}
+                      size={96}
                       username={resolvedUsername}
                     />
                   </View>
@@ -855,33 +832,12 @@ export default function AccountScreen() {
                 <View style={styles.editSection}>
                   <View style={styles.editLabelRow}>
                     <Text style={styles.editLabel}>Description</Text>
-                    {isEditProfileBioFocused ? (
-                      <Pressable
-                        onPress={() => {
-                          setIsEditProfileBioFocused(false);
-                          Keyboard.dismiss();
-                        }}
-                        style={({ pressed }) => [styles.inputDoneButton, pressed ? styles.menuActionDisabled : undefined]}
-                      >
-                        <Text style={styles.inputDoneText}>Done</Text>
-                      </Pressable>
-                    ) : null}
                   </View>
                   <TextInput
                     multiline
                     maxLength={PROFILE_BIO_MAX_LENGTH}
-                    onBlur={() => setIsEditProfileBioFocused(false)}
                     onChangeText={setEditProfileBio}
-                    onFocus={() => {
-                      setIsEditProfileBioFocused(true);
-                      requestAnimationFrame(() => {
-                        editProfileScrollRef.current?.scrollToEnd({ animated: true });
-                      });
-                    }}
-                    onSubmitEditing={() => {
-                      setIsEditProfileBioFocused(false);
-                      Keyboard.dismiss();
-                    }}
+                    onSubmitEditing={Keyboard.dismiss}
                     placeholder="Tell people a little about your style"
                     placeholderTextColor={theme.color.inkSoft}
                     returnKeyType="done"
@@ -1079,19 +1035,19 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(251, 247, 241, 0.6)",
     borderColor: "rgba(188, 157, 126, 0.8)",
     borderRadius: 999,
-    borderWidth: 4,
+    borderWidth: 3,
     justifyContent: "center",
-    marginBottom: 12,
-    padding: 5,
+    marginBottom: 10,
+    padding: 4,
     shadowColor: "#9b7a63",
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.14,
-    shadowRadius: 20,
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
   },
   container: {
-    backgroundColor: "#f7f1e8",
+    backgroundColor: theme.color.cream,
     flexGrow: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
   },
   debugButton: {
     alignItems: "center",
@@ -1179,35 +1135,35 @@ const styles = StyleSheet.create({
   emptyFitsCard: {
     backgroundColor: "rgba(255,249,243,0.84)",
     borderColor: "rgba(216,206,194,0.88)",
-    borderRadius: 22,
+    borderRadius: 18,
     borderWidth: 1,
-    padding: 22,
+    padding: 18,
   },
   emptyFitsCopy: {
     color: theme.color.inkSoft,
-    fontSize: 15,
-    lineHeight: 21,
-    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 5,
   },
   emptyFitsTitle: {
     color: theme.color.ink,
     fontFamily: "serif",
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: "700",
   },
   fitGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 6,
     justifyContent: "flex-start",
   },
   fitScorePill: {
     backgroundColor: "rgba(246, 233, 219, 0.78)",
     borderColor: "rgba(255,255,255,0.65)",
-    borderRadius: 15,
+    borderRadius: 13,
     borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     position: "absolute",
     right: 8,
     top: 8,
@@ -1215,15 +1171,15 @@ const styles = StyleSheet.create({
   fitScoreText: {
     color: "#ca8b71",
     fontFamily: Platform.select({ ios: "Avenir Next", default: undefined }),
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
   },
   fitTile: {
-    borderRadius: 20,
-    height: 192,
+    borderRadius: 16,
+    height: 164,
     overflow: "hidden",
     position: "relative",
-    width: "31.8%",
+    width: "32.1%",
   },
   fitTilePressed: {
     opacity: 0.9,
@@ -1237,15 +1193,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderTopColor: "rgba(210,178,148,0.62)",
     borderTopWidth: 1,
-    marginBottom: 16,
-    marginTop: 10,
-    paddingTop: 9,
+    marginBottom: 12,
+    marginTop: 8,
+    paddingTop: 8,
   },
   gridHandle: {
     backgroundColor: "rgba(222,203,181,0.95)",
     borderRadius: 999,
-    height: 8,
-    width: 68,
+    height: 6,
+    width: 54,
   },
   headerActions: {
     alignItems: "center",
@@ -1271,24 +1227,8 @@ const styles = StyleSheet.create({
   heroActionsRow: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 18,
+    marginTop: 14,
     width: "100%",
-  },
-  heroGlow: {
-    backgroundColor: "rgba(233, 214, 190, 0.44)",
-    borderRadius: 320,
-    height: 260,
-    position: "absolute",
-    width: 260,
-  },
-  heroGlowPrimary: {
-    left: -22,
-    top: 28,
-  },
-  heroGlowSecondary: {
-    opacity: 0.48,
-    right: -32,
-    top: 70,
   },
   heroStat: {
     alignItems: "center",
@@ -1297,20 +1237,20 @@ const styles = StyleSheet.create({
   heroStatLabel: {
     color: "#6e5648",
     fontFamily: Platform.select({ ios: "Avenir Next", default: undefined }),
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "500",
     lineHeight: 15,
-    marginTop: 3,
+    marginTop: 2,
   },
   heroStatValue: {
     color: "#5b4030",
     fontFamily: Platform.select({ ios: "Georgia-Bold", default: "serif" }),
-    fontSize: 28,
+    fontSize: 23,
     fontWeight: "700",
   },
   heroStatsRow: {
     flexDirection: "row",
-    marginTop: 16,
+    marginTop: 12,
     width: "100%",
   },
   infoCard: {
@@ -1358,23 +1298,13 @@ const styles = StyleSheet.create({
     marginTop: 18,
     textAlign: "center",
   },
-  inputDoneButton: {
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  inputDoneText: {
-    color: theme.color.accentBright,
-    fontSize: 13,
-    fontWeight: "700",
-  },
   loadingCard: {
     alignItems: "center",
     backgroundColor: "rgba(255,249,243,0.84)",
     borderColor: "rgba(216,206,194,0.88)",
-    borderRadius: 22,
+    borderRadius: 18,
     borderWidth: 1,
-    padding: 22,
+    padding: 18,
   },
   loadingText: {
     color: theme.color.inkSoft,
@@ -1384,63 +1314,42 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginBottom: 10,
+    marginBottom: 8,
     position: "relative",
     zIndex: 3,
   },
   topBarActions: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 10,
-  },
-  topBarButton: {
-    alignItems: "center",
-    backgroundColor: "rgba(255,250,246,0.72)",
-    borderColor: "rgba(222,203,181,0.88)",
-    borderRadius: theme.radius.pill,
-    borderWidth: 1,
-    justifyContent: "center",
-    minHeight: 44,
-    minWidth: 88,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    shadowColor: "#9b7a63",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-  },
-  topBarButtonText: {
-    color: theme.color.inkSoft,
-    fontSize: 13,
-    fontWeight: "700",
+    gap: 8,
   },
   topBarMenuButton: {
     alignItems: "center",
     backgroundColor: "rgba(255,250,246,0.72)",
     borderColor: "rgba(222,203,181,0.88)",
-    borderRadius: 22,
+    borderRadius: 18,
     borderWidth: 1,
-    height: 44,
+    height: 38,
     justifyContent: "center",
     shadowColor: "#9b7a63",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    width: 44,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    width: 38,
   },
   topBarMenuText: {
     color: theme.color.inkSoft,
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "400",
     marginTop: -1,
   },
   accountInfoCard: {
     backgroundColor: "rgba(255,249,243,0.88)",
     borderColor: "rgba(216,206,194,0.88)",
-    borderRadius: 22,
+    borderRadius: 18,
     borderWidth: 1,
-    marginTop: 18,
-    padding: 18,
+    marginTop: 14,
+    padding: 16,
   },
   accountInfoHint: {
     color: theme.color.inkSoft,
@@ -1458,7 +1367,7 @@ const styles = StyleSheet.create({
   accountInfoValue: {
     color: theme.color.ink,
     fontFamily: Platform.select({ ios: "Georgia-Bold", default: "serif" }),
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: "700",
     marginTop: 6,
   },
@@ -1501,9 +1410,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     borderWidth: 1,
     color: theme.color.ink,
-    marginTop: 8,
-    minHeight: 104,
-    padding: 14,
+    marginTop: 7,
+    minHeight: 92,
+    padding: 12,
   },
   editLabel: {
     color: theme.color.inkSoft,
@@ -1519,14 +1428,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     justifyContent: "center",
-    padding: 6,
+    padding: 4,
   },
   editProfilePreview: {
     alignItems: "center",
-    gap: 14,
+    gap: 10,
   },
   editSection: {
-    marginTop: 20,
+    marginTop: 16,
   },
   historyDetails: {
     color: theme.color.inkSoft,
@@ -1573,16 +1482,16 @@ const styles = StyleSheet.create({
     fontWeight: "300",
   },
   menuContent: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingTop: 4,
   },
   menuHandle: {
     alignSelf: "center",
     backgroundColor: "rgba(209,188,164,0.9)",
     borderRadius: 999,
-    height: 6,
-    marginBottom: 14,
-    width: 72,
+    height: 5,
+    marginBottom: 10,
+    width: 58,
   },
   menuHeader: {
     alignItems: "center",
@@ -1591,10 +1500,10 @@ const styles = StyleSheet.create({
   },
   menuPanel: {
     backgroundColor: theme.color.shell,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     maxHeight: "82%",
-    paddingTop: 12,
+    paddingTop: 10,
   },
   menuActionChevron: {
     color: "#b58f74",
@@ -1619,27 +1528,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
-    minHeight: 78,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    minHeight: 68,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   menuActionItemActive: {
     borderColor: "rgba(208, 156, 128, 0.92)",
     borderWidth: 1.5,
   },
   menuActionStack: {
-    gap: 12,
-    marginTop: 18,
+    gap: 10,
+    marginTop: 14,
   },
   menuActionTitle: {
     color: theme.color.ink,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
   },
   menuTitle: {
     color: theme.color.ink,
     fontFamily: "serif",
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: "700",
     marginTop: 4,
   },
@@ -1660,21 +1569,21 @@ const styles = StyleSheet.create({
   sheetActionsRow: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 18,
+    marginTop: 14,
   },
   sheetActionStack: {
-    gap: 12,
-    marginTop: 18,
+    gap: 10,
+    marginTop: 14,
   },
   sheetContent: {
-    paddingHorizontal: 18,
-    paddingTop: 8,
+    paddingHorizontal: 16,
+    paddingTop: 6,
   },
   sheetHeader: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
   },
   sheetKeyboardRoot: {
     flex: 1,
@@ -1682,10 +1591,10 @@ const styles = StyleSheet.create({
   },
   sheetPanel: {
     backgroundColor: theme.color.shell,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     maxHeight: "88%",
-    paddingTop: 12,
+    paddingTop: 10,
   },
   sheetPrimaryButton: {
     flex: 1,
@@ -1694,7 +1603,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
     justifyContent: "center",
-    minHeight: 48,
+    minHeight: 44,
   },
   signOutButton: {
     alignItems: "center",
@@ -1703,12 +1612,12 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.pill,
     borderWidth: 1,
     justifyContent: "center",
-    marginTop: 18,
-    minHeight: 50,
+    marginTop: 14,
+    minHeight: 44,
   },
   signOutButtonText: {
     color: theme.color.ink,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
   },
   profileActionsRow: {
@@ -1741,49 +1650,35 @@ const styles = StyleSheet.create({
   profileBio: {
     color: "#6b5448",
     fontFamily: Platform.select({ ios: "Avenir Next", default: undefined }),
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: "500",
-    lineHeight: 19,
-    marginTop: 10,
-    maxWidth: 330,
+    lineHeight: 18,
+    marginTop: 8,
+    maxWidth: 304,
     textAlign: "center",
   },
   profileHandle: {
     color: "#c0a186",
     fontFamily: Platform.select({ ios: "Avenir Next", default: undefined }),
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "500",
     marginTop: 2,
   },
   profileHero: {
     alignItems: "center",
     justifyContent: "flex-end",
-    overflow: "hidden",
     paddingHorizontal: 8,
-    paddingBottom: 8,
-    paddingTop: 24,
+    paddingBottom: 4,
+    paddingTop: 16,
     position: "relative",
   },
   profileName: {
     color: "#654636",
     fontFamily: Platform.select({ ios: "Georgia-Bold", default: "serif" }),
-    fontSize: 33,
+    fontSize: 28,
     fontWeight: "700",
-    marginTop: 10,
+    marginTop: 8,
     textAlign: "center",
-  },
-  ghostOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(247, 241, 232, 0.74)",
-  },
-  ghostPortrait: {
-    height: "128%",
-    left: "50%",
-    opacity: 0.12,
-    position: "absolute",
-    top: -18,
-    transform: [{ translateX: -170 }],
-    width: 340,
   },
   editProfileButton: {
     alignItems: "center",
@@ -1793,17 +1688,17 @@ const styles = StyleSheet.create({
     borderWidth: 1.8,
     flex: 1,
     justifyContent: "center",
-    minHeight: 58,
-    paddingHorizontal: 24,
+    minHeight: 48,
+    paddingHorizontal: 18,
     shadowColor: "#b28669",
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
   },
   editProfileButtonText: {
     color: "#664636",
     fontFamily: Platform.select({ ios: "Georgia-Bold", default: "serif" }),
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "700",
   },
   status: {

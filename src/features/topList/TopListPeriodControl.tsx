@@ -41,7 +41,7 @@ export function TopListPeriodControl({
 const styles = StyleSheet.create({
   label: {
     color: theme.color.sepia,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "700",
   },
   labelActive: {
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
     justifyContent: "center",
-    minHeight: 58,
+    minHeight: 48,
     paddingHorizontal: 12,
   },
   segmentActive: {

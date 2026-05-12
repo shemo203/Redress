@@ -138,7 +138,7 @@ export function TopListScreen() {
         styles.container,
         {
           paddingBottom: Math.max(insets.bottom + 166, 196),
-          paddingTop: Math.max(insets.top + 18, 30),
+          paddingTop: Math.max(insets.top + 12, 22),
         },
       ]}
       showsVerticalScrollIndicator={false}
@@ -231,22 +231,22 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: theme.color.cream,
     flexGrow: 1,
-    paddingHorizontal: 22,
+    paddingHorizontal: 18,
   },
   headerBlock: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   headerSubtitle: {
     color: theme.color.inkSoft,
-    fontSize: 18,
-    lineHeight: 24,
-    marginTop: 6,
+    fontSize: 15,
+    lineHeight: 20,
+    marginTop: 4,
   },
   headerTitle: {
     color: theme.color.sepia,
-    fontSize: 34,
+    fontSize: 30,
     fontWeight: "800",
-    letterSpacing: -1,
+    letterSpacing: -0.8,
   },
   inlineLoading: {
     color: theme.color.inkSoft,
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   personalCardWrap: {
-    marginTop: 22,
+    marginTop: 18,
   },
   primaryButton: {
     alignItems: "center",
@@ -264,41 +264,41 @@ const styles = StyleSheet.create({
     backgroundColor: theme.color.accentBright,
     borderRadius: theme.radius.pill,
     justifyContent: "center",
-    marginTop: 18,
-    minHeight: 50,
-    paddingHorizontal: 22,
+    marginTop: 14,
+    minHeight: 44,
+    paddingHorizontal: 16,
   },
   primaryButtonText: {
     color: theme.color.white,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
   },
   rankListCard: {
-    marginTop: 28,
+    marginTop: 20,
     overflow: "hidden",
     paddingVertical: 2,
   },
   sectionGap: {
-    marginTop: 26,
+    marginTop: 18,
   },
   stateCard: {
     alignItems: "center",
-    marginTop: 28,
-    paddingHorizontal: 22,
-    paddingVertical: 28,
+    marginTop: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 22,
   },
   stateText: {
     color: theme.color.inkSoft,
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: 10,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 8,
     textAlign: "center",
   },
   stateTitle: {
     color: theme.color.sepia,
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: "700",
-    marginTop: 14,
+    marginTop: 12,
     textAlign: "center",
   },
 });

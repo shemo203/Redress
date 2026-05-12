@@ -64,9 +64,7 @@ export default function UploadScreen() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [submitMode, setSubmitMode] = useState<SubmitMode | null>(null);
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
-  const [isCaptionFocused, setIsCaptionFocused] = useState(false);
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
-  const [isTagUrlFocused, setIsTagUrlFocused] = useState(false);
 
   const previewPlayer = useVideoPlayer(
     pickedMedia?.mediaType === "video" ? pickedMedia.uri : null,
@@ -86,7 +84,6 @@ export default function UploadScreen() {
 
   const closeTagComposer = () => {
     Keyboard.dismiss();
-    setIsTagUrlFocused(false);
     setIsTagModalVisible(false);
     resetTagForm();
   };
@@ -421,7 +418,7 @@ export default function UploadScreen() {
           styles.scrollContent,
           {
             paddingBottom: Math.max(insets.bottom + 92, 120),
-            paddingTop: Math.max(insets.top + 14, 24),
+            paddingTop: Math.max(insets.top + 10, 18),
           },
         ]}
         automaticallyAdjustKeyboardInsets
@@ -435,7 +432,7 @@ export default function UploadScreen() {
           </Text>
           <GlassButton
             disabled={!canSaveDraft}
-            minHeight={40}
+            minHeight={36}
             onPress={() => void submitPost("draft")}
             style={styles.saveDraftButton}
             textStyle={styles.saveDraftButtonText}
@@ -485,7 +482,7 @@ export default function UploadScreen() {
           <View style={styles.previewActionsRow}>
             <GlassButton
               disabled={!canPreview}
-              minHeight={46}
+              minHeight={42}
               onPress={() => setIsPreviewVisible(true)}
               style={styles.previewActionButton}
               textStyle={styles.previewActionText}
@@ -494,7 +491,7 @@ export default function UploadScreen() {
               Preview post
             </GlassButton>
             <GlassButton
-              minHeight={46}
+              minHeight={42}
               onPress={openMediaPicker}
               style={styles.previewActionButton}
               textStyle={styles.previewActionText}
@@ -508,27 +505,11 @@ export default function UploadScreen() {
         <GlassCard style={styles.captionCard}>
           <View style={styles.captionHeader}>
             <Text style={styles.captionLabel}>Description</Text>
-            {isCaptionFocused ? (
-              <Pressable
-                onPress={() => {
-                  setIsCaptionFocused(false);
-                  Keyboard.dismiss();
-                }}
-                style={({ pressed }) => [styles.captionDoneButton, pressed ? styles.pressed : undefined]}
-              >
-                <Text style={styles.captionDoneText}>Done</Text>
-              </Pressable>
-            ) : null}
           </View>
           <TextInput
             multiline
             onChangeText={setCaption}
-            onBlur={() => setIsCaptionFocused(false)}
-            onFocus={() => setIsCaptionFocused(true)}
-            onSubmitEditing={() => {
-              setIsCaptionFocused(false);
-              Keyboard.dismiss();
-            }}
+            onSubmitEditing={Keyboard.dismiss}
             placeholder="Describe your look..."
             placeholderTextColor={theme.color.warmGold}
             returnKeyType="done"
@@ -561,7 +542,7 @@ export default function UploadScreen() {
           )}
 
           <GlassButton
-            minHeight={52}
+            minHeight={44}
             onPress={openNewTagComposer}
             style={styles.addItemButton}
             textStyle={styles.addItemButtonText}
@@ -575,7 +556,7 @@ export default function UploadScreen() {
             <Text style={styles.publishHint}>{publishHint}</Text>
             <GlassButton
               disabled={!canPublish}
-              minHeight={60}
+              minHeight={50}
               onPress={() => void submitPost("published")}
               style={styles.publishButton}
             >
@@ -705,34 +686,18 @@ export default function UploadScreen() {
                   <Text style={styles.fieldLabel}>
                     {REQUIRE_TAG_URLS ? "Link" : "Link (optional)"}
                   </Text>
-                  {isTagUrlFocused ? (
-                    <Pressable
-                      onPress={() => {
-                        setIsTagUrlFocused(false);
-                        Keyboard.dismiss();
-                      }}
-                      style={({ pressed }) => [styles.fieldDoneButton, pressed ? styles.pressed : undefined]}
-                    >
-                      <Text style={styles.fieldDoneText}>Done</Text>
-                    </Pressable>
-                  ) : null}
                 </View>
                 <TextInput
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="url"
                   onChangeText={setTagUrl}
-                  onBlur={() => setIsTagUrlFocused(false)}
                   onFocus={() => {
-                    setIsTagUrlFocused(true);
                     requestAnimationFrame(() => {
                       tagComposerScrollRef.current?.scrollToEnd({ animated: true });
                     });
                   }}
-                  onSubmitEditing={() => {
-                    setIsTagUrlFocused(false);
-                    Keyboard.dismiss();
-                  }}
+                  onSubmitEditing={Keyboard.dismiss}
                   placeholder="https://..."
                   placeholderTextColor={theme.color.warmGold}
                   returnKeyType="done"
@@ -749,7 +714,7 @@ export default function UploadScreen() {
 
               <View style={styles.modalActions}>
                 <GlassButton
-                  minHeight={50}
+                  minHeight={44}
                   onPress={closeTagComposer}
                   style={styles.modalAction}
                   textStyle={styles.modalSecondaryText}
@@ -758,7 +723,7 @@ export default function UploadScreen() {
                   Cancel
                 </GlassButton>
                 <GlassButton
-                  minHeight={50}
+                  minHeight={44}
                   onPress={saveTag}
                   style={styles.modalAction}
                   variant="cream"
@@ -779,53 +744,42 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     flexDirection: "row",
     gap: 8,
-    marginTop: 14,
-    paddingHorizontal: 18,
+    marginTop: 12,
+    paddingHorizontal: 15,
   },
   addItemButtonText: {
     color: theme.color.sepia,
     fontFamily: "System",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
   },
   addItemInnerLabel: {
     color: theme.color.sepia,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "500",
   },
   addItemInnerText: {
     color: theme.color.sepia,
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "300",
     marginTop: -2,
   },
   captionCard: {
-    marginTop: 18,
-    minHeight: 108,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-  },
-  captionDoneButton: {
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  captionDoneText: {
-    color: theme.color.warmGold,
-    fontSize: 14,
-    fontWeight: "700",
+    marginTop: 14,
+    minHeight: 92,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   captionHeader: {
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   captionInput: {
     color: theme.color.sepia,
-    fontSize: 18,
-    lineHeight: 26,
-    minHeight: 72,
+    fontSize: 16,
+    lineHeight: 22,
+    minHeight: 58,
     padding: 0,
   },
   captionLabel: {
@@ -842,8 +796,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 8,
     marginRight: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
   categoryButtonActive: {
     backgroundColor: "rgba(208,156,128,0.18)",
@@ -851,7 +805,7 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     color: theme.color.inkSoft,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
   },
   categoryTextActive: {
@@ -864,49 +818,38 @@ const styles = StyleSheet.create({
   },
   emptyItemsCopy: {
     color: theme.color.muted,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 5,
   },
   feedbackCard: {
-    marginTop: 16,
-    padding: 18,
+    marginTop: 14,
+    padding: 16,
   },
   feedbackText: {
     color: theme.color.inkSoft,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 19,
   },
   fieldCard: {
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  fieldDoneButton: {
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  fieldDoneText: {
-    color: theme.color.warmGold,
-    fontSize: 13,
-    fontWeight: "700",
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   fieldHeader: {
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between",
   },
   fieldHint: {
     color: theme.color.muted,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 8,
+    fontSize: 11.5,
+    lineHeight: 16,
+    marginTop: 6,
   },
   fieldInput: {
     color: theme.color.sepia,
-    fontSize: 16,
-    marginTop: 6,
+    fontSize: 15,
+    marginTop: 5,
     minHeight: 22,
     padding: 0,
   },
@@ -921,13 +864,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: 12,
-    marginBottom: 18,
+    marginBottom: 14,
   },
   headerTitle: {
     color: theme.color.sepia,
     flex: 1,
     fontFamily: "serif",
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: "700",
     paddingRight: 8,
     textAlign: "left",
@@ -936,13 +879,13 @@ const styles = StyleSheet.create({
     width: "48.4%",
   },
   itemsSection: {
-    marginTop: 22,
+    marginTop: 18,
   },
   itemsWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
-    marginTop: 8,
+    gap: 10,
+    marginTop: 7,
   },
   modalAction: {
     flex: 1,
@@ -950,7 +893,7 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 18,
+    marginTop: 16,
   },
   modalBackdrop: {
     backgroundColor: "rgba(20,14,11,0.24)",
@@ -962,17 +905,17 @@ const styles = StyleSheet.create({
   },
   modalCopy: {
     color: theme.color.inkSoft,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
   },
   modalHandle: {
     alignSelf: "center",
     backgroundColor: "rgba(209,188,164,0.9)",
     borderRadius: 999,
-    height: 6,
-    marginBottom: 10,
-    width: 70,
+    height: 5,
+    marginBottom: 8,
+    width: 58,
   },
   modalKeyboardRoot: {
     flex: 1,
@@ -980,21 +923,21 @@ const styles = StyleSheet.create({
   },
   modalPanel: {
     backgroundColor: theme.color.shell,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 10,
   },
   modalSecondaryText: {
     color: theme.color.ink,
     fontFamily: "System",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
   },
   modalTitle: {
     color: theme.color.sepia,
     fontFamily: "serif",
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: "700",
   },
   pressed: {
@@ -1005,18 +948,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "rgba(255,250,244,0.56)",
     borderRadius: 999,
-    height: 72,
+    height: 58,
     justifyContent: "center",
-    width: 72,
+    width: 58,
   },
   previewBadgePlus: {
     color: theme.color.sepia,
-    fontSize: 40,
+    fontSize: 30,
     fontWeight: "300",
     marginTop: -4,
   },
   previewCard: {
-    minHeight: 318,
+    minHeight: 280,
     overflow: "hidden",
     padding: 0,
   },
@@ -1026,38 +969,38 @@ const styles = StyleSheet.create({
   previewActionsRow: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 12,
+    marginTop: 10,
   },
   previewActionText: {
     color: theme.color.sepia,
     fontFamily: "System",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
   },
   previewEmptyCopy: {
     color: theme.color.inkSoft,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 8,
-    maxWidth: 240,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 6,
+    maxWidth: 220,
     textAlign: "center",
   },
   previewEmptyState: {
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 318,
-    paddingHorizontal: 28,
+    minHeight: 280,
+    paddingHorizontal: 24,
   },
   previewEmptyTitle: {
     color: theme.color.sepia,
     fontFamily: "serif",
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "700",
-    marginTop: 16,
+    marginTop: 12,
     textAlign: "center",
   },
   previewMedia: {
-    height: 318,
+    height: 280,
     width: "100%",
   },
   previewMetaPill: {
@@ -1066,11 +1009,11 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.pill,
     borderWidth: 1,
     color: theme.color.sepia,
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "600",
     overflow: "hidden",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
   },
   previewMetaRow: {
     alignItems: "center",
@@ -1079,15 +1022,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     left: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     position: "absolute",
     right: 0,
   },
   previewMetaText: {
     color: theme.color.sepia,
     flex: 1,
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: "500",
     marginRight: 10,
   },
@@ -1096,15 +1039,15 @@ const styles = StyleSheet.create({
   },
   publishHint: {
     color: theme.color.muted,
-    fontSize: 13,
+    fontSize: 12.5,
     textAlign: "center",
   },
   publishSection: {
-    marginTop: 34,
+    marginTop: 24,
   },
   resultLink: {
     color: theme.color.sepia,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     marginTop: 10,
   },
@@ -1116,30 +1059,30 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   saveDraftButton: {
-    minWidth: 88,
-    paddingHorizontal: 14,
+    minWidth: 82,
+    paddingHorizontal: 12,
     shadowOpacity: 0.1,
   },
   saveDraftButtonText: {
     color: theme.color.ink,
     fontFamily: "System",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
   },
   screen: {
-    backgroundColor: "#f7f1e8",
+    backgroundColor: theme.color.cream,
     flex: 1,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
     color: theme.color.sepia,
     fontFamily: "serif",
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: "700",
   },
 });

@@ -2,7 +2,6 @@ import { Link, useFocusEffect, useLocalSearchParams, useRouter } from "expo-rout
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -38,6 +37,9 @@ const EMPTY_COUNTS: FollowCounts = {
   followersCount: 0,
   followingCount: 0,
 };
+const HERO_MIN_HEIGHT = 220;
+const HERO_MAX_HEIGHT = 280;
+const HERO_HEIGHT_RATIO = 0.28;
 
 function formatCompactMetric(value: number) {
   if (value < 1000) {
@@ -110,7 +112,10 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<SocialProfile | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const heroHeight = Math.max(250, Math.min(320, Math.round(screenHeight * 0.31)));
+  const heroHeight = Math.max(
+    HERO_MIN_HEIGHT,
+    Math.min(HERO_MAX_HEIGHT, Math.round(screenHeight * HERO_HEIGHT_RATIO))
+  );
 
   const loadProfileScreen = useCallback(async () => {
     if (!targetProfileId) {
@@ -276,7 +281,7 @@ export default function ProfileScreen() {
         styles.container,
         {
           paddingBottom: Math.max(insets.bottom + 120, 144),
-          paddingTop: Math.max(insets.top + 10, 24),
+          paddingTop: Math.max(insets.top + 8, 18),
         },
       ]}
       showsVerticalScrollIndicator={false}
@@ -285,16 +290,7 @@ export default function ProfileScreen() {
         <Pressable onPress={() => router.back()} style={chrome.headerButton}>
           <Text style={chrome.headerButtonText}>Back</Text>
         </Pressable>
-
-        <Link asChild href="/(app)/search">
-          <Pressable style={chrome.headerButton}>
-            <Text style={chrome.headerButtonText}>Search</Text>
-          </Pressable>
-        </Link>
       </View>
-
-      <View pointerEvents="none" style={[styles.heroGlow, styles.heroGlowPrimary]} />
-      <View pointerEvents="none" style={[styles.heroGlow, styles.heroGlowSecondary]} />
 
       {isLoading ? (
         <View style={[chrome.glassCardSoft, styles.stateCard]}>
@@ -304,32 +300,19 @@ export default function ProfileScreen() {
       ) : profile ? (
         <>
           <View style={[styles.profileHero, { minHeight: heroHeight }]}>
-            {profile.avatar_url ? (
-              <Image
-                resizeMode="cover"
-                source={{ uri: profile.avatar_url }}
-                style={styles.ghostPortrait}
-              />
-            ) : null}
-            <View style={styles.ghostOverlay} />
-
             <View style={styles.avatarRing}>
               <ProfileAvatar
                 avatarUrl={profile.avatar_url}
-                size={114}
+                size={96}
                 username={profile.username}
               />
             </View>
 
             <Text style={styles.profileName}>{formatDisplayName(profile.username)}</Text>
             <Text style={styles.profileHandle}>@{profile.username}</Text>
-            <ExpandableProfileBio
-              text={
-                profile.bio?.trim() ||
-                "Curating conscious style | Based in Stockholm | Lover of linen and vintage finds"
-              }
-              textStyle={styles.profileBio}
-            />
+            {profile.bio?.trim() ? (
+              <ExpandableProfileBio text={profile.bio.trim()} textStyle={styles.profileBio} />
+            ) : null}
 
             <View style={styles.heroStatsRow}>
               <View style={styles.heroStat}>
@@ -403,7 +386,7 @@ export default function ProfileScreen() {
                   fit={fit}
                   onPress={() => {
                     router.push({
-                      params: { postId: fit.id },
+                      params: { creatorId: targetProfileId, postId: fit.id },
                       pathname: "/(app)",
                     });
                   }}
@@ -439,33 +422,33 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(251, 247, 241, 0.6)",
     borderColor: "rgba(188, 157, 126, 0.8)",
     borderRadius: 999,
-    borderWidth: 4,
+    borderWidth: 3,
     justifyContent: "center",
-    marginBottom: 12,
-    padding: 5,
+    marginBottom: 10,
+    padding: 4,
     shadowColor: "#9b7a63",
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.14,
-    shadowRadius: 20,
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
   },
   container: {
-    backgroundColor: "#f7f1e8",
+    backgroundColor: theme.color.cream,
     flexGrow: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
   },
   fitGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 6,
     justifyContent: "flex-start",
   },
   fitScorePill: {
     backgroundColor: "rgba(246, 233, 219, 0.78)",
     borderColor: "rgba(255,255,255,0.65)",
-    borderRadius: 15,
+    borderRadius: 13,
     borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     position: "absolute",
     right: 8,
     top: 8,
@@ -473,15 +456,15 @@ const styles = StyleSheet.create({
   fitScoreText: {
     color: "#ca8b71",
     fontFamily: Platform.select({ ios: "Avenir Next", default: undefined }),
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
   },
   fitTile: {
-    borderRadius: 20,
-    height: 192,
+    borderRadius: 16,
+    height: 164,
     overflow: "hidden",
     position: "relative",
-    width: "31.8%",
+    width: "32.1%",
   },
   fitTilePressed: {
     opacity: 0.9,
@@ -497,17 +480,17 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.pill,
     flex: 1,
     justifyContent: "center",
-    minHeight: 58,
-    paddingHorizontal: 24,
+    minHeight: 48,
+    paddingHorizontal: 18,
     shadowColor: "#b28669",
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
   },
   followButtonText: {
     color: theme.color.white,
     fontFamily: Platform.select({ ios: "Georgia-Bold", default: "serif" }),
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "700",
   },
   followingButton: {
@@ -518,64 +501,35 @@ const styles = StyleSheet.create({
     borderWidth: 1.8,
     flex: 1,
     justifyContent: "center",
-    minHeight: 58,
-    paddingHorizontal: 24,
+    minHeight: 48,
+    paddingHorizontal: 18,
     shadowColor: "#b28669",
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
   },
   followingButtonText: {
     color: "#664636",
-  },
-  ghostOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(247, 241, 232, 0.74)",
-  },
-  ghostPortrait: {
-    height: "128%",
-    left: "50%",
-    opacity: 0.12,
-    position: "absolute",
-    top: -18,
-    transform: [{ translateX: -170 }],
-    width: 340,
   },
   gridDivider: {
     alignItems: "center",
     borderTopColor: "rgba(210,178,148,0.62)",
     borderTopWidth: 1,
-    marginBottom: 16,
-    marginTop: 10,
-    paddingTop: 9,
+    marginBottom: 12,
+    marginTop: 8,
+    paddingTop: 8,
   },
   gridHandle: {
     backgroundColor: "rgba(222,203,181,0.95)",
     borderRadius: 999,
-    height: 8,
-    width: 68,
+    height: 6,
+    width: 54,
   },
   heroActionsRow: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 18,
+    marginTop: 14,
     width: "100%",
-  },
-  heroGlow: {
-    backgroundColor: "rgba(233, 214, 190, 0.44)",
-    borderRadius: 320,
-    height: 260,
-    position: "absolute",
-    width: 260,
-  },
-  heroGlowPrimary: {
-    left: -22,
-    top: 72,
-  },
-  heroGlowSecondary: {
-    opacity: 0.48,
-    right: -32,
-    top: 112,
   },
   heroStat: {
     alignItems: "center",
@@ -584,20 +538,20 @@ const styles = StyleSheet.create({
   heroStatLabel: {
     color: "#6e5648",
     fontFamily: Platform.select({ ios: "Avenir Next", default: undefined }),
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "500",
     lineHeight: 15,
-    marginTop: 3,
+    marginTop: 2,
   },
   heroStatsRow: {
     flexDirection: "row",
-    marginTop: 16,
+    marginTop: 12,
     width: "100%",
   },
   heroStatValue: {
     color: "#5b4030",
     fontFamily: Platform.select({ ios: "Georgia-Bold", default: "serif" }),
-    fontSize: 28,
+    fontSize: 23,
     fontWeight: "700",
   },
   inlineStatus: {
@@ -610,35 +564,34 @@ const styles = StyleSheet.create({
   profileBio: {
     color: "#6b5448",
     fontFamily: Platform.select({ ios: "Avenir Next", default: undefined }),
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: "500",
-    lineHeight: 19,
-    marginTop: 10,
-    maxWidth: 330,
+    lineHeight: 18,
+    marginTop: 8,
+    maxWidth: 304,
     textAlign: "center",
   },
   profileHandle: {
     color: "#c0a186",
     fontFamily: Platform.select({ ios: "Avenir Next", default: undefined }),
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "500",
     marginTop: 2,
   },
   profileHero: {
     alignItems: "center",
     justifyContent: "flex-end",
-    overflow: "hidden",
     paddingHorizontal: 8,
-    paddingBottom: 8,
-    paddingTop: 24,
+    paddingBottom: 4,
+    paddingTop: 16,
     position: "relative",
   },
   profileName: {
     color: "#654636",
     fontFamily: Platform.select({ ios: "Georgia-Bold", default: "serif" }),
-    fontSize: 33,
+    fontSize: 28,
     fontWeight: "700",
-    marginTop: 10,
+    marginTop: 8,
     textAlign: "center",
   },
   retryButton: {
@@ -649,28 +602,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "rgba(255,249,243,0.84)",
     borderColor: "rgba(216,206,194,0.88)",
-    borderRadius: 22,
+    borderRadius: 18,
     borderWidth: 1,
-    padding: 22,
+    padding: 18,
   },
   stateText: {
     color: theme.color.inkSoft,
-    lineHeight: 22,
-    marginTop: 10,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 8,
     textAlign: "center",
   },
   stateTitle: {
     color: theme.color.ink,
     fontFamily: "serif",
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: "700",
     textAlign: "center",
   },
   topBar: {
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
+    justifyContent: "flex-start",
+    marginBottom: 8,
     position: "relative",
     zIndex: 3,
   },

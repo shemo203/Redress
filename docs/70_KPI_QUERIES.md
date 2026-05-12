@@ -209,7 +209,7 @@ from tag_counts;
 ## Grading
 
 ### Top List ranking preview (same ordering as the app leaderboard)
-This mirrors the app's MVP Top List ordering for an all-time slice.
+This mirrors the app's MVP Top List ordering for an all-time slice, including the current minimum `3`-grade eligibility threshold.
 
 ```sql
 with grade_stats as (
@@ -219,6 +219,7 @@ with grade_stats as (
     count(*)::bigint as grade_count
   from public.grades g
   group by g.post_id
+  having count(*) >= 3
 ),
 item_counts as (
   select

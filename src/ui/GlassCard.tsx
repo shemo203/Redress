@@ -33,7 +33,7 @@ export function GlassCard({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
   },
   pressed: {

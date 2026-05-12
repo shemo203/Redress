@@ -57,8 +57,8 @@ export function BrandMark({
               compact ? styles.logoCompact : undefined,
               !symbolOnly && (variant === "chrome" ? styles.logoChrome : styles.logoAccent),
               {
-                height: symbolOnly ? size * 0.84 : size * 1.6,
-                width: symbolOnly ? size * 0.84 : size * 1.6,
+                height: symbolOnly ? size * 1.26 : size * 1.6,
+                width: symbolOnly ? size * 1.26 : size * 1.6,
               },
             ]}
             resizeMode={symbolOnly ? "contain" : "cover"}
