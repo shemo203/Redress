@@ -14,6 +14,7 @@ Later behavior changes:
 - `supabase/migrations/20260423000500_feed_ranking_seen_posts.sql`
 - `supabase/migrations/20260423000600_media_posts_images.sql`
 - `supabase/migrations/20260509000100_delete_own_post_rpc.sql`
+- `supabase/migrations/20260510000100_top_list_rpcs.sql`
 
 ## Core Tables
 
@@ -257,6 +258,43 @@ RLS is enabled on:
 - requires at least one tag in `clothing_tags`
 - updates `status='published'`, sets `published_at`, and returns updated row
 - is the only supported publish path (RLS update policy keeps client updates in draft-only state)
+- runs as `security definer`; execute granted to `authenticated` only
+
+## RPC: get_top_posts(period text, page_limit integer)
+`public.get_top_posts(period text, page_limit integer default 20)`:
+- requires authentication
+- supports periods:
+  - `today`
+  - `week`
+  - `all`
+- returns only published posts with at least one grade in the selected grade window
+- returns:
+  - `rank`
+  - `post_id`
+  - `creator_id`
+  - `username`
+  - `avatar_url`
+  - `caption`
+  - `media_type`
+  - `video_url`
+  - `avg_grade`
+  - `grade_count`
+  - `item_count`
+  - `published_at`
+- ranking order is:
+  1. `avg_grade desc`
+  2. `grade_count desc`
+  3. `published_at desc`
+- `today` and `week` are based on grades created inside the selected period; `all` uses all grades
+- runs as `security definer`; execute granted to `authenticated` only
+
+## RPC: get_my_best_ranked_post(period text)
+`public.get_my_best_ranked_post(period text)`:
+- requires authentication
+- uses the same ranking window and ordering as `public.get_top_posts(...)`
+- returns the signed-in creator's highest-ranked published post for the requested period, if one exists
+- returns the same leaderboard row shape as `public.get_top_posts(...)`
+- returns no rows when the creator has no ranked post in that period
 - runs as `security definer`; execute granted to `authenticated` only
 
 ## RPC: set_grade(post_id uuid, grade_value integer)

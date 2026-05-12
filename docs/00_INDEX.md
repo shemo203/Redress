@@ -27,6 +27,7 @@ Redress is a fashion short-form video app (TikTok-like feed) with:
 - `app/(public)/terms.tsx`: in-app Terms of Use page linked from onboarding
 - `app/(public)/privacy.tsx`: in-app Privacy Notice page linked from onboarding
 - `app/(app)/index.tsx`: authenticated feed / published media stream
+- `app/(app)/top-list.tsx`: authenticated Top List leaderboard for best-rated fits, with Today / This Week / All Time filters, podium, ranked list, and personal best-fit card
 - `app/(app)/upload.tsx`: premium single-screen creator flow with large media preview, minimal caption card, item sheet, save draft, and sticky publish CTA
 - `app/(app)/draft/[postId].tsx`: matching draft editor for tag cleanup and final publish
 - `app/(app)/published.tsx`: dev-friendly published posts listing

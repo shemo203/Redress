@@ -78,6 +78,8 @@ Notes:
 Migration added in Q2:
 - `supabase/migrations/20260305000100_q2_core_schema.sql`
 - `supabase/migrations/20260306000100_q4_storage_videos_bucket.sql`
+- later app features also rely on newer migrations, including:
+  - `supabase/migrations/20260510000100_top_list_rpcs.sql` for the Top List leaderboard RPCs
 
 If you are using Supabase SQL Editor instead of CLI:
 1. Open the migration file.

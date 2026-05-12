@@ -34,6 +34,12 @@ Ship the MVP for an Expo client backed by Supabase.
 
 ## Feed MVP Rules
 - The feed lives at the authenticated app root and is rendered by `app/(app)/index.tsx`.
+- Each feed card should present creator identity and caption together in the top bar instead of using a separate bottom caption box.
+- Long feed captions should stay clamped in the fixed-height top bar and open separately when tapped.
+- Feed action overlays should follow the current editorial layout:
+  - small Items pill beneath the top bar
+  - rating card anchored above the dock on the lower right
+  - Save/Comment pill anchored above the dock as a horizontal action bar
 - Re-tapping the active dock destination should not replay navigation or animate the same screen again.
 - Re-tapping the active feed or account dock destination should scroll that surface back to the top when no modal/sheet is open.
 - If no published posts exist yet, the feed shows an empty-state CTA to upload the first post instead of trying to render an empty scroll experience.
@@ -41,6 +47,36 @@ Ship the MVP for an Expo client backed by Supabase.
 - Creators should be able to delete their own posts from the post card itself, with a confirmation step before removal.
 - The reveal-items sheet should present clean tagged-item cards and remain scrollable when a post has many items.
 - Reporting a tagged link from the reveal-items sheet should immediately swap into the report composer instead of staying behind the current sheet.
+
+## Navigation Shell
+- The bottom dock uses a five-slot editorial layout:
+  - `Search`
+  - `Top List`
+  - centered circular `Feed` / Redress logo button
+  - `Add fit`
+  - `Profile`
+
+## Top List MVP Rules
+- The Top List route lives at `app/(app)/top-list.tsx`.
+- The screen shows a time-filtered leaderboard of published posts with at least one grade.
+- Available filters:
+  - `Today`
+  - `This Week`
+  - `All Time`
+- Ranking order is:
+  1. average grade descending
+  2. grade count descending
+  3. published timestamp descending
+- `Today` and `This Week` use grades created within the selected period.
+- `All Time` uses all grades on published posts.
+- The Top List screen should show:
+  - a header with subtitle
+  - a segmented period control
+  - a top-three podium
+  - a rounded ranked list for ranks `4+`
+  - a personal card for `Your best fit this week`
+- Tapping a podium card or ranked row should open the existing feed post surface through the feed route with a `postId` param.
+- Re-tapping the active Top List dock item should not re-navigate or animate the screen again; it should scroll the leaderboard back to the top.
 
 ## Profile MVP Rules
 - The signed-in profile supports updating the profile photo from the device photo library.

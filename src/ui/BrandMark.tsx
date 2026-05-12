@@ -9,6 +9,7 @@ type BrandMarkProps = {
   compact?: boolean;
   elevated?: boolean;
   showLabel?: boolean;
+  symbolOnly?: boolean;
   showWordmark?: boolean;
   size?: number;
   variant?: "accent" | "chrome";
@@ -18,6 +19,7 @@ export function BrandMark({
   badgeStyle,
   compact = false,
   elevated = false,
+  symbolOnly = false,
   showWordmark = false,
   size = 86,
   variant = "accent",
@@ -51,15 +53,15 @@ export function BrandMark({
           <Image
             source={redressLogo}
             style={[
-              styles.logo,
+              symbolOnly ? styles.logoAsset : styles.logo,
               compact ? styles.logoCompact : undefined,
-              variant === "chrome" ? styles.logoChrome : styles.logoAccent,
+              !symbolOnly && (variant === "chrome" ? styles.logoChrome : styles.logoAccent),
               {
-                height: size * 1.6,
-                width: size * 1.6,
+                height: symbolOnly ? size * 0.84 : size * 1.6,
+                width: symbolOnly ? size * 0.84 : size * 1.6,
               },
             ]}
-            resizeMode="cover"
+            resizeMode={symbolOnly ? "contain" : "cover"}
           />
         )}
       </View>
@@ -101,6 +103,9 @@ const styles = StyleSheet.create({
     tintColor: theme.color.accentBright,
   },
   logoCompact: {
+    marginTop: 0,
+  },
+  logoAsset: {
     marginTop: 0,
   },
   wrap: {

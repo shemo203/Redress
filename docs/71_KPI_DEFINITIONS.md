@@ -77,7 +77,7 @@ What it misses today:
 - Everything. The app does not yet log reveal-sheet opens.
 
 Minimal instrumentation needed:
-- A `tag_reveals` table or equivalent event with `post_id`, `user_id`, and `created_at`.
+- A `tag_reveals`  table or equivalent event with `post_id`, `user_id`, and `created_at`.
 
 ### Outbound link engagement per post
 What it measures:

@@ -208,6 +208,51 @@ from tag_counts;
 
 ## Grading
 
+### Top List ranking preview (same ordering as the app leaderboard)
+This mirrors the app's MVP Top List ordering for an all-time slice.
+
+```sql
+with grade_stats as (
+  select
+    g.post_id,
+    round(avg(g.value)::numeric, 1) as avg_grade,
+    count(*)::bigint as grade_count
+  from public.grades g
+  group by g.post_id
+),
+item_counts as (
+  select
+    ct.post_id,
+    count(*)::bigint as item_count
+  from public.clothing_tags ct
+  group by ct.post_id
+)
+select
+  row_number() over (
+    order by
+      gs.avg_grade desc,
+      gs.grade_count desc,
+      vp.published_at desc,
+      vp.id desc
+  ) as rank,
+  vp.id as post_id,
+  p.username,
+  gs.avg_grade,
+  gs.grade_count,
+  coalesce(ic.item_count, 0) as item_count,
+  vp.published_at
+from public.video_posts vp
+join grade_stats gs
+  on gs.post_id = vp.id
+join public.profiles p
+  on p.id = vp.creator_id
+left join item_counts ic
+  on ic.post_id = vp.id
+where vp.status = 'published'
+order by rank
+limit 20;
+```
+
 ### Grade participation rate
 Approximation: percent of registered users who graded at least one post. This is not the same as percent of viewers who graded, because we do not have feed view events.
 

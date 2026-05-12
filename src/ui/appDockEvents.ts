@@ -1,10 +1,11 @@
-export type AppDockDestination = "account" | "feed" | "upload";
+export type AppDockDestination = "account" | "feed" | "top-list" | "upload";
 
 type DockRetapHandler = () => void;
 
 const retapListeners = new Map<AppDockDestination, Set<DockRetapHandler>>([
   ["account", new Set<DockRetapHandler>()],
   ["feed", new Set<DockRetapHandler>()],
+  ["top-list", new Set<DockRetapHandler>()],
   ["upload", new Set<DockRetapHandler>()],
 ]);
 

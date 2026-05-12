@@ -68,6 +68,7 @@ import { GradeSlider, ProfileAvatar } from "../../src/ui";
 import { getDetailedErrorMessage } from "../../src/utils/errors";
 import { validateClothingTagUrl } from "../../src/utils";
 
+const clothingTagIcon = require("../../assets/PNGGG.png PNGGGG.png");
 const PAGE_SIZE = 8;
 
 type ReportDraft = {
@@ -102,7 +103,6 @@ type CommentsSheetProps = {
 type FeedVideoCardProps = {
   active: boolean;
   avgGradeText: string;
-  captionExpanded: boolean;
   commentCount: number;
   gradeCount: number;
   height: number;
@@ -114,6 +114,7 @@ type FeedVideoCardProps = {
   onOpenProfile: () => void;
   onReportPost: () => void;
   onRevealItems: () => void;
+  onSavePost: () => void;
   onToggleCaption: () => void;
   post: FeedPost;
   shouldMountVideo: boolean;
@@ -124,7 +125,6 @@ type FeedVideoCardProps = {
 function FeedVideoCard({
   active,
   avgGradeText,
-  captionExpanded,
   commentCount,
   gradeCount,
   height,
@@ -136,6 +136,7 @@ function FeedVideoCard({
   onOpenProfile,
   onReportPost,
   onRevealItems,
+  onSavePost,
   onToggleCaption,
   post,
   shouldMountVideo,
@@ -149,12 +150,9 @@ function FeedVideoCard({
     }
   );
   const captionPreview = getCaptionPreview(post.caption);
-  const captionText = captionExpanded
-    ? post.caption.trim() || "Fresh fit, no caption yet."
-    : captionPreview.text;
+  const captionText = captionPreview.text;
   const creatorLabel = post.creator_username.trim().toUpperCase();
-  const taggedItemCopy =
-    post.tags.length === 1 ? "1 tagged item" : `${post.tags.length} tagged items`;
+  const taggedItemCopy = `Items · ${post.tags.length}`;
 
   useEffect(() => {
     if (!shouldMountVideo || post.media_type !== "video") {
@@ -190,20 +188,29 @@ function FeedVideoCard({
       <View style={styles.videoTint} />
       <View style={[styles.creatorCardWrap, { top: topInset + 4 }]}>
         <View style={styles.creatorCard}>
-          <Pressable onPress={onOpenProfile} style={styles.creatorMainTap}>
+          <View style={styles.creatorMainTap}>
             <View style={styles.creatorAvatar}>
-              <ProfileAvatar
-                avatarUrl={post.creator_avatar_url}
-                size={48}
-                username={post.creator_username}
-              />
+              <Pressable onPress={onOpenProfile}>
+                <ProfileAvatar
+                  avatarUrl={post.creator_avatar_url}
+                  size={42}
+                  username={post.creator_username}
+                />
+              </Pressable>
             </View>
             <View style={styles.creatorMeta}>
-              <Text numberOfLines={1} style={styles.creatorName}>
-                {creatorLabel}
-              </Text>
+              <Pressable onPress={onOpenProfile}>
+                <Text numberOfLines={1} style={styles.creatorName}>
+                  {creatorLabel}
+                </Text>
+              </Pressable>
+              <Pressable hitSlop={6} onPress={onToggleCaption}>
+                <Text numberOfLines={1} style={styles.creatorCaption}>
+                  {captionText}
+                </Text>
+              </Pressable>
             </View>
-          </Pressable>
+          </View>
           <Pressable
             disabled={isHeaderActionDisabled}
             onPress={onHeaderActionPress}
@@ -217,13 +224,12 @@ function FeedVideoCard({
         </View>
       </View>
 
-      <View style={styles.sideRail}>
-        <Pressable onPress={onRevealItems} style={styles.sidePill}>
-          <Text style={styles.sidePillLabel}>Items</Text>
-          <Text style={styles.sidePillSubLabel}>{taggedItemCopy}</Text>
-        </Pressable>
+      <Pressable onPress={onRevealItems} style={[styles.itemsPill, { top: topInset + 80 }]}>
+        <Image source={clothingTagIcon} resizeMode="contain" style={styles.itemsPillIcon} />
+        <Text style={styles.itemsPillLabel}>{taggedItemCopy}</Text>
+      </Pressable>
 
-        <Pressable onPress={onOpenGradeSheet} style={styles.scoreCard}>
+      <Pressable onPress={onOpenGradeSheet} style={styles.scoreCard}>
           <Text style={styles.scoreCardValue}>{avgGradeText}</Text>
           <Text style={styles.scoreCardSub}>
             {gradeCount > 0 ? String(gradeCount) : "Rate"}
@@ -235,32 +241,19 @@ function FeedVideoCard({
           )}
         </Pressable>
 
-        <Pressable onPress={onOpenComments} style={styles.sideIconButton}>
-          <Text style={styles.sideIconButtonText}>Comments</Text>
-          <Text style={styles.sideIconButtonSubText}>
+      <View style={styles.feedActionBar}>
+        <Pressable onPress={onSavePost} style={styles.feedActionButton}>
+          <Text style={styles.feedActionButtonText}>Save</Text>
+        </Pressable>
+        <View style={styles.feedActionDivider} />
+        <Pressable onPress={onOpenComments} style={styles.feedActionButton}>
+          <Text style={styles.feedActionButtonText}>Comment</Text>
+          <Text style={styles.feedActionButtonMeta}>
             {commentCount > 0 ? String(commentCount) : "Add"}
           </Text>
         </Pressable>
-
       </View>
 
-      <View style={styles.bottomOverlay}>
-        <View style={styles.captionCard}>
-          <Pressable onPress={onOpenProfile}>
-            <Text style={styles.bottomUsername}>@{post.creator_username}</Text>
-          </Pressable>
-          <Pressable onPress={onToggleCaption}>
-            <Text numberOfLines={captionExpanded ? 4 : 2} style={styles.caption}>
-              {captionText}
-            </Text>
-            {captionPreview.truncated ? (
-              <Text style={styles.expandCopy}>
-                {captionExpanded ? "Show less" : "More"}
-              </Text>
-            ) : null}
-          </Pressable>
-        </View>
-      </View>
     </View>
   );
 }
@@ -510,9 +503,6 @@ export default function FeedScreen() {
   const [reportDraft, setReportDraft] = useState<ReportDraft | null>(null);
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportSubmitting, setReportSubmitting] = useState(false);
-  const [expandedCaptionPostId, setExpandedCaptionPostId] = useState<string | null>(
-    null
-  );
   const [gradeSheetVisible, setGradeSheetVisible] = useState(false);
   const [gradeSheetPostId, setGradeSheetPostId] = useState<string | null>(null);
   const [gradeDraftValue, setGradeDraftValue] = useState(5);
@@ -604,6 +594,22 @@ export default function FeedScreen() {
     []
   );
 
+  const handleSavePost = useCallback(() => {
+    Alert.alert(
+      "Save coming soon",
+      "We haven't wired saved posts yet, but this control is now in place."
+    );
+  }, []);
+
+  const handleOpenCaption = useCallback((post: FeedPost) => {
+    const caption = post.caption.trim();
+    if (!caption) {
+      return;
+    }
+
+    Alert.alert(`@${post.creator_username}`, caption);
+  }, []);
+
   const confirmDeletePost = useCallback(
     async (post: FeedPost) => {
       if (deletingPostId) {
@@ -644,9 +650,6 @@ export default function FeedScreen() {
         return next;
       });
 
-      if (expandedCaptionPostId === post.id) {
-        setExpandedCaptionPostId(null);
-      }
       if (gradeSheetPostId === post.id) {
         setGradeSheetVisible(false);
         setGradeSheetPostId(null);
@@ -673,7 +676,6 @@ export default function FeedScreen() {
       activeIndex,
       commentsSheetPostId,
       deletingPostId,
-      expandedCaptionPostId,
       gradeSheetPostId,
       requestedPostId,
       router,
@@ -1069,7 +1071,6 @@ export default function FeedScreen() {
         return;
       }
 
-      setExpandedCaptionPostId(null);
       setFeedMessage(null);
       setActiveIndex(0);
 
@@ -1775,7 +1776,6 @@ export default function FeedScreen() {
                 height={cardHeight}
                 active={index === activeIndex && isFeedFocused && !commentsSheetVisible}
                 shouldMountVideo={Math.abs(index - activeIndex) <= 1}
-                captionExpanded={expandedCaptionPostId === item.id}
                 commentCount={commentCountsByPost[item.id] ?? 0}
                 headerActionLabel={
                   item.creator_id === user?.id
@@ -1786,9 +1786,7 @@ export default function FeedScreen() {
                 }
                 isHeaderActionDisabled={deletingPostId === item.id}
                 onToggleCaption={() => {
-                  setExpandedCaptionPostId((current) =>
-                    current === item.id ? null : item.id
-                  );
+                  handleOpenCaption(item);
                 }}
                 onHeaderActionPress={() => {
                   if (item.creator_id === user?.id) {
@@ -1820,6 +1818,7 @@ export default function FeedScreen() {
                   });
                 }}
                 onRevealItems={openRevealSheet}
+                onSavePost={handleSavePost}
                 topInset={insets.top}
                 avgGradeText={stats?.avg != null ? stats.avg.toFixed(1) : "—"}
                 gradeCount={stats?.count ?? 0}
@@ -2172,13 +2171,6 @@ export default function FeedScreen() {
 }
 
 const styles = StyleSheet.create({
-  bottomOverlay: {
-    bottom: 94,
-    left: 8,
-    position: "absolute",
-    right: 82,
-    zIndex: 4,
-  },
   commentBody: {
     flex: 1,
     marginLeft: 12,
@@ -2381,27 +2373,6 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: "700",
   },
-  bottomUsername: {
-    color: theme.color.white,
-    fontSize: 12,
-    fontWeight: "700",
-    marginBottom: 2,
-  },
-  caption: {
-    color: "rgba(255,255,255,0.96)",
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  captionCard: {
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(192, 170, 144, 0.54)",
-    borderColor: "rgba(255,255,255,0.18)",
-    borderRadius: 13,
-    borderWidth: 1,
-    maxWidth: 194,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
   cardWrap: {
     backgroundColor: "#d7c7b4",
     overflow: "hidden",
@@ -2420,73 +2391,78 @@ const styles = StyleSheet.create({
     maxWidth: 240,
     textAlign: "center",
   },
-  expandCopy: {
-    color: "rgba(255,255,255,0.86)",
-    fontSize: 9,
-    fontWeight: "700",
-    marginTop: 3,
-  },
   creatorAvatar: {
     borderRadius: 999,
-    height: 48,
+    height: 42,
     overflow: "hidden",
-    width: 48,
+    width: 42,
   },
   creatorButton: {
-    alignSelf: "flex-start",
+    alignItems: "center",
     backgroundColor: "rgba(255,109,104,0.92)",
     borderRadius: theme.radius.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    justifyContent: "center",
+    minHeight: 34,
+    minWidth: 84,
+    paddingHorizontal: 14,
+    paddingVertical: 0,
   },
   creatorButtonDisabled: {
     opacity: 0.72,
   },
   creatorButtonText: {
     color: theme.color.white,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
   },
   creatorCard: {
     alignItems: "center",
     backgroundColor: "rgba(214, 190, 164, 0.66)",
     borderColor: "rgba(255,255,255,0.24)",
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
-    gap: 10,
+    gap: 12,
+    height: 68,
     justifyContent: "space-between",
-    paddingHorizontal: 11,
-    paddingVertical: 8,
+    maxWidth: 368,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     shadowColor: "#6f5b4b",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
-    width: 208,
+    width: "100%",
   },
   creatorCardWrap: {
     alignItems: "center",
-    left: 8,
+    left: 14,
     position: "absolute",
-    right: 8,
+    right: 14,
     zIndex: 4,
   },
   creatorMeta: {
     alignItems: "flex-start",
+    flex: 1,
+    gap: 4,
     flexShrink: 1,
   },
   creatorMainTap: {
-    alignItems: "center",
+    alignItems: "flex-start",
     flex: 1,
     flexDirection: "row",
-    gap: 10,
+    gap: 11,
+  },
+  creatorCaption: {
+    color: "rgba(255,255,255,0.94)",
+    fontSize: 11.5,
+    lineHeight: 14,
   },
   creatorName: {
     color: theme.color.white,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
-    letterSpacing: 0.3,
-    marginBottom: 3,
+    letterSpacing: 0.2,
   },
   feedMessage: {
     backgroundColor: "rgba(255,249,243,0.92)",
@@ -2718,38 +2694,39 @@ const styles = StyleSheet.create({
   },
   scoreCard: {
     alignItems: "center",
+    bottom: 98,
     backgroundColor: "rgba(203, 180, 154, 0.58)",
     borderColor: "rgba(255,255,255,0.20)",
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 8,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
-    minHeight: 104,
-    minWidth: 68,
-    paddingHorizontal: 10,
+    minHeight: 100,
+    minWidth: 76,
+    paddingHorizontal: 12,
     paddingVertical: 12,
+    position: "absolute",
+    right: 16,
+    zIndex: 4,
   },
   scoreCardHint: {
     color: "rgba(255,255,255,0.82)",
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: "700",
-    marginTop: 4,
+    marginTop: 5,
     textAlign: "center",
   },
   scoreCardSub: {
     color: "rgba(255,255,255,0.84)",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "400",
-    lineHeight: 16,
-    marginTop: 1,
+    lineHeight: 15,
+    marginTop: 3,
   },
   scoreCardValue: {
     color: theme.color.white,
     fontFamily: "serif",
-    fontSize: 38,
+    fontSize: 34,
     fontWeight: "500",
-    lineHeight: 40,
+    lineHeight: 36,
   },
   screen: {
     backgroundColor: "#d8c8b8",
@@ -2815,6 +2792,74 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "700",
   },
+  feedActionBar: {
+    alignItems: "center",
+    backgroundColor: "rgba(116, 99, 83, 0.56)",
+    borderColor: "rgba(255,255,255,0.18)",
+    borderRadius: 20,
+    borderWidth: 1,
+    bottom: 98,
+    flexDirection: "row",
+    left: 16,
+    minHeight: 48,
+    paddingHorizontal: 10,
+    position: "absolute",
+    zIndex: 4,
+  },
+  feedActionButton: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "center",
+    minHeight: 34,
+    minWidth: 84,
+    paddingHorizontal: 6,
+  },
+  feedActionButtonMeta: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  feedActionButtonText: {
+    color: theme.color.white,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  feedActionDivider: {
+    backgroundColor: "rgba(255,255,255,0.22)",
+    borderRadius: 999,
+    height: 22,
+    marginHorizontal: 4,
+    width: 1,
+  },
+  itemsPill: {
+    alignItems: "center",
+    backgroundColor: "rgba(203, 180, 154, 0.62)",
+    borderColor: "rgba(255,255,255,0.20)",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+    minHeight: 44,
+    minWidth: 108,
+    paddingHorizontal: 14,
+    position: "absolute",
+    right: 18,
+    zIndex: 4,
+  },
+  itemsPillIcon: {
+    height: 28,
+    left: 10,
+    position: "absolute",
+    width: 28,
+  },
+  itemsPillLabel: {
+    color: theme.color.white,
+    fontSize: 13,
+    fontWeight: "700",
+    paddingLeft: 18,
+    textAlign: "center",
+  },
   sideRail: {
     alignItems: "center",
     gap: 8,
@@ -2846,30 +2891,6 @@ const styles = StyleSheet.create({
   sideIconButtonSubText: {
     color: "rgba(255,255,255,0.82)",
     fontSize: 12,
-    marginTop: 2,
-    textAlign: "center",
-  },
-  sidePill: {
-    backgroundColor: "rgba(203, 180, 154, 0.54)",
-    borderColor: "rgba(255,255,255,0.20)",
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 8,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 8,
-    borderWidth: 1,
-    minWidth: 74,
-    paddingHorizontal: 8,
-    paddingVertical: 7,
-  },
-  sidePillLabel: {
-    color: theme.color.white,
-    fontSize: 12,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  sidePillSubLabel: {
-    color: "rgba(255,255,255,0.82)",
-    fontSize: 8,
     marginTop: 2,
     textAlign: "center",
   },
