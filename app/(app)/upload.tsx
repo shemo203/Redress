@@ -163,8 +163,8 @@ export default function UploadScreen() {
     });
     setStatusMessage(
       mediaType === "image"
-        ? "Photo cropped and ready. Add at least one item to publish."
-        : "Video selected. Add at least one item to publish."
+        ? "Photo cropped and ready. Add at least one clothing tag to publish."
+        : "Video selected. Add at least one clothing tag to publish."
     );
   };
 
@@ -197,7 +197,7 @@ export default function UploadScreen() {
     });
 
     if (!cleanName) {
-      setStatusMessage("Tag name is required.");
+      setStatusMessage("Clothing name is required.");
       return;
     }
 
@@ -222,7 +222,7 @@ export default function UploadScreen() {
       return currentTags.map((tag) => (tag.id === editingTagId ? nextTag : tag));
     });
 
-    setStatusMessage(editingTagId ? "Item updated." : "Item added.");
+    setStatusMessage(editingTagId ? "Clothing updated." : "Clothing added.");
     closeTagComposer();
   };
 
@@ -231,7 +231,7 @@ export default function UploadScreen() {
     if (editingTagId === tagId) {
       closeTagComposer();
     }
-    setStatusMessage("Item removed.");
+    setStatusMessage("Clothing removed.");
   };
 
   const submitPost = async (mode: SubmitMode) => {
@@ -246,7 +246,7 @@ export default function UploadScreen() {
     }
 
     if (isTagModalVisible) {
-      setStatusMessage("Finish the item editor first.");
+      setStatusMessage("Finish the clothing editor first.");
       return;
     }
 
@@ -400,7 +400,7 @@ export default function UploadScreen() {
   const publishHint = !pickedMedia
     ? "Choose a photo or video to start"
     : tags.length === 0
-      ? "Tag at least one item to publish"
+      ? "Add at least one clothing tag to publish"
       : "Ready to publish";
   const previewItems = tags.map((tag) => ({
     id: tag.id,
@@ -521,11 +521,11 @@ export default function UploadScreen() {
         </GlassCard>
 
         <View style={styles.itemsSection}>
-          <Text style={styles.sectionTitle}>Items</Text>
+          <Text style={styles.sectionTitle}>Clothing</Text>
 
           {tags.length === 0 ? (
             <Text style={styles.emptyItemsCopy}>
-              Add the first item now so the look can be published.
+              Add the first clothing tag now so the look can be published.
             </Text>
           ) : (
             <View style={styles.itemsWrap}>
@@ -549,7 +549,7 @@ export default function UploadScreen() {
             variant="soft"
           >
             <Text style={styles.addItemInnerText}>＋</Text>
-            <Text style={styles.addItemInnerLabel}>Add item</Text>
+            <Text style={styles.addItemInnerLabel}>Add clothing</Text>
           </GlassButton>
 
           <View style={styles.publishSection}>
@@ -618,10 +618,10 @@ export default function UploadScreen() {
             >
               <View style={styles.modalHandle} />
               <Text style={styles.modalTitle}>
-                {editingTagId ? "Edit item" : "Add item"}
+                {editingTagId ? "Edit clothing" : "Add clothing"}
               </Text>
               <Text style={styles.modalCopy}>
-                Keep it simple: name, brand, category, and an optional safe link.
+                Keep it simple: clothing name, brand, category, and an optional safe link.
               </Text>
 
               <ScrollView
@@ -634,7 +634,7 @@ export default function UploadScreen() {
                 showsVerticalScrollIndicator={false}
               >
               <GlassCard style={styles.fieldCard}>
-                <Text style={styles.fieldLabel}>Name</Text>
+                <Text style={styles.fieldLabel}>Clothing name</Text>
                 <TextInput
                   onChangeText={setTagName}
                   placeholder="Bag"
@@ -728,7 +728,7 @@ export default function UploadScreen() {
                   style={styles.modalAction}
                   variant="cream"
                 >
-                  {editingTagId ? "Save item" : "Add item"}
+                  {editingTagId ? "Save clothing" : "Add clothing"}
                 </GlassButton>
               </View>
             </Pressable>

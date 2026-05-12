@@ -34,7 +34,7 @@ export function TopListRow({ entry, isLast = false, onPress }: TopListRowProps) 
       <View style={styles.scoreWrap}>
         <Text style={styles.score}>{entry.avgGrade.toFixed(1)}</Text>
         <Text style={styles.subtle}>
-          {entry.itemCount} {entry.itemCount === 1 ? "item" : "items"}
+          {entry.itemCount} {entry.itemCount === 1 ? "piece" : "pieces"}
         </Text>
       </View>
 

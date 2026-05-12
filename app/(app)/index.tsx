@@ -153,7 +153,7 @@ function FeedVideoCard({
   const captionPreview = getCaptionPreview(post.caption);
   const captionText = captionPreview.text;
   const creatorLabel = post.creator_username.trim().toUpperCase();
-  const taggedItemCopy = `Items · ${post.tags.length}`;
+  const taggedItemCopy = `Clothing · ${post.tags.length}`;
 
   useEffect(() => {
     if (!shouldMountVideo || post.media_type !== "video") {
@@ -1995,13 +1995,13 @@ export default function FeedScreen() {
           <Pressable style={styles.sheetPanel} onPress={() => {}}>
             <View style={styles.sheetHeaderRow}>
               <View style={styles.sheetHeaderText}>
-                <Text style={styles.sheetTitle}>Reveal items</Text>
+                <Text style={styles.sheetTitle}>Clothing</Text>
                 <Text style={styles.sheetSubTitle}>
                   {!activePost
                     ? "No post selected"
                     : activePost.tags.length === 1
-                      ? "1 tagged item"
-                      : `${activePost.tags.length} tagged items`}
+                      ? "1 clothing tag"
+                      : `${activePost.tags.length} clothing tags`}
                 </Text>
               </View>
               <Pressable
@@ -2023,7 +2023,7 @@ export default function FeedScreen() {
               {sheetMessage ? <Text style={styles.sheetMessage}>{sheetMessage}</Text> : null}
 
               {!activePost || activePost.tags.length === 0 ? (
-                <Text style={styles.sheetEmpty}>No items tagged for this post.</Text>
+                <Text style={styles.sheetEmpty}>No clothing tagged for this post.</Text>
               ) : (
                 activePost.tags.map((tag) => {
                   const linkSummary = getTagLinkSummary(tag);
@@ -2147,7 +2147,7 @@ export default function FeedScreen() {
             <View style={styles.linkPreviewHeaderRow}>
               <View style={styles.linkPreviewHeaderText}>
                 <Text numberOfLines={1} style={styles.linkPreviewTagName}>
-                  {linkPreviewState?.tag.name ?? "Tagged item"}
+                  {linkPreviewState?.tag.name ?? "Tagged clothing"}
                 </Text>
                 <Text numberOfLines={2} style={styles.linkPreviewTitle}>
                   {linkPreviewState?.preview.title ?? "Open site"}
@@ -2172,7 +2172,7 @@ export default function FeedScreen() {
 
             <Text numberOfLines={3} style={styles.linkPreviewDescription}>
               {linkPreviewState?.preview.description ??
-                "We’ll open this item in your browser. Metadata is fetched best-effort from the destination site."}
+                "We’ll open this clothing link in your browser. Metadata is fetched best-effort from the destination site."}
             </Text>
 
             {linkPreviewMessage ? (

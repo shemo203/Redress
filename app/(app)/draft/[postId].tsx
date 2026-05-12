@@ -132,7 +132,7 @@ export default function DraftPostScreen() {
     });
 
     if (!cleanName) {
-      setStatusMessage("Tag name is required.");
+      setStatusMessage("Clothing name is required.");
       return;
     }
 
@@ -396,7 +396,7 @@ export default function DraftPostScreen() {
           <View style={styles.sectionHeader}>
             <View>
               <Text style={chrome.eyebrow}>Tags</Text>
-              <Text style={styles.cardTitle}>{editingTagId ? "Update item" : "Add item"}</Text>
+              <Text style={styles.cardTitle}>{editingTagId ? "Update clothing" : "Add clothing"}</Text>
             </View>
             <Text style={styles.sectionCount}>
               {tags.length} {tags.length === 1 ? "tag" : "tags"}
@@ -407,7 +407,7 @@ export default function DraftPostScreen() {
             Keep the outfit links clean. The post can only publish once at least one tag is saved.
           </Text>
 
-          <Text style={chrome.label}>Name</Text>
+          <Text style={chrome.label}>Clothing name</Text>
           <TextInput
             style={chrome.input}
             value={tagName}
@@ -486,7 +486,7 @@ export default function DraftPostScreen() {
           {tags.length === 0 ? (
             <View style={styles.emptyTagState}>
               <Text style={styles.emptyTagTitle}>No tags saved yet</Text>
-              <Text style={styles.emptyTagCopy}>Save at least one item to unlock publish.</Text>
+              <Text style={styles.emptyTagCopy}>Save at least one clothing tag to unlock publish.</Text>
             </View>
           ) : (
             <View style={styles.tagList}>

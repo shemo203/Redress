@@ -89,7 +89,7 @@ export function CreatePostPreviewModal({
                 {caption.trim() ? caption.trim() : "No description yet."}
               </Text>
 
-              <Text style={styles.metaLabel}>Items</Text>
+              <Text style={styles.metaLabel}>Clothing</Text>
               {items.length > 0 ? (
                 <View style={styles.itemWrap}>
                   {items.map((item) => (
@@ -101,7 +101,7 @@ export function CreatePostPreviewModal({
                   ))}
                 </View>
               ) : (
-                <Text style={styles.emptyItemsText}>No items added yet.</Text>
+                <Text style={styles.emptyItemsText}>No clothing added yet.</Text>
               )}
             </ScrollView>
           </View>

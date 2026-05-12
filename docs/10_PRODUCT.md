@@ -19,8 +19,8 @@ Ship the MVP for an Expo client backed by Supabase.
 - The primary post flow lives on the upload screen.
 - Creators pick a single photo or video, add a caption, add clothing tags inline, and publish from the same screen.
 - Image posts now open a lightweight native crop step immediately after image selection.
-- The image crop step uses a consistent `3:4` post frame so the cropped result better preserves full outfits while staying consistent across the app's image-post presentation.
-- The create-post screen should offer a simple full-post preview before publishing so creators can check the selected media, caption, and item tags together.
+- The image crop step uses a consistent `2:3` post frame so the cropped result preserves more full-body outfit framing while staying consistent across the app's image-post presentation.
+- The create-post screen should offer a simple full-post preview before publishing so creators can check the selected media, caption, and clothing tags together.
 - The publish CTA sits directly in the create flow under the items section instead of floating over the screen.
 - The upload and draft editor surfaces now use the same guided three-step framing:
   - `Draft`
@@ -37,7 +37,7 @@ Ship the MVP for an Expo client backed by Supabase.
 - Each feed card should present creator identity and caption together in the top bar instead of using a separate bottom caption box.
 - Long feed captions should stay clamped in the fixed-height top bar and open separately when tapped.
 - Feed action overlays should follow the current editorial layout:
-  - small Items pill beneath the top bar
+  - small Clothing pill beneath the top bar
   - rating card anchored above the dock on the lower right
   - Save/Comment pill anchored above the dock as a horizontal action bar
 - Re-tapping the active dock destination should not replay navigation or animate the same screen again.
