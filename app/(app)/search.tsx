@@ -72,7 +72,7 @@ export default function SearchScreen() {
       return;
     }
 
-    router.replace("/(app)");
+    router.replace("/feed");
   };
 
   return (
@@ -92,7 +92,7 @@ export default function SearchScreen() {
         </Pressable>
 
         {user?.id ? (
-          <Link asChild href={`/(app)/profile/${user.id}`}>
+          <Link asChild href={`/profile/${user.id}`}>
             <Pressable style={styles.headerButton}>
               <Text style={styles.headerButtonText}>My profile</Text>
             </Pressable>
@@ -150,7 +150,7 @@ export default function SearchScreen() {
       {!isLoading && results.length > 0 ? (
         <View style={styles.resultsCard}>
           {results.map((result) => (
-            <Link key={result.id} asChild href={`/(app)/profile/${result.id}`}>
+            <Link key={result.id} asChild href={`/profile/${result.id}`}>
               <Pressable style={styles.resultRow}>
                 <ProfileAvatar
                   avatarUrl={result.avatar_url}

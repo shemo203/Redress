@@ -36,7 +36,7 @@ export default function SignInScreen() {
       return;
     }
 
-    router.replace("/(app)");
+    router.replace("/feed");
   }, [router, session]);
 
   const handleEmailSignIn = async () => {
@@ -167,13 +167,13 @@ export default function SignInScreen() {
             {statusMessage ? <Text style={styles.errorText}>{statusMessage}</Text> : null}
 
             <View style={styles.linkRow}>
-              <Link href="/(auth)/forgot-password" style={styles.linkText}>
+              <Link href="/forgot-password" style={styles.linkText}>
                 Forgot password?
               </Link>
             </View>
             <View style={styles.linkRow}>
               <Text style={styles.metaText}>Need an account? </Text>
-              <Link href="/(auth)/sign-up" style={styles.linkText}>
+              <Link href="/sign-up" style={styles.linkText}>
                 Sign up
               </Link>
             </View>

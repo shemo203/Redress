@@ -15,28 +15,28 @@ type DockRoute = AppDockDestination | "search";
 const dockRouteConfig: Record<
   DockRoute,
   {
-    href: "/(app)" | "/(app)/account" | "/(app)/top-list" | "/(app)/upload" | "/(app)/search";
+    href: "/feed" | "/account" | "/top-list" | "/upload" | "/search";
     matches: (pathname: string) => boolean;
   }
 > = {
   account: {
-    href: "/(app)/account",
+    href: "/account",
     matches: (pathname) => pathname.startsWith("/account"),
   },
   feed: {
-    href: "/(app)",
-    matches: (pathname) => pathname === "/",
+    href: "/feed",
+    matches: (pathname) => pathname === "/" || pathname.startsWith("/feed"),
   },
   search: {
-    href: "/(app)/search",
+    href: "/search",
     matches: (pathname) => pathname.startsWith("/search"),
   },
   "top-list": {
-    href: "/(app)/top-list",
+    href: "/top-list",
     matches: (pathname) => pathname.startsWith("/top-list"),
   },
   upload: {
-    href: "/(app)/upload",
+    href: "/upload",
     matches: (pathname) => pathname.startsWith("/upload"),
   },
 };

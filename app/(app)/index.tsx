@@ -671,7 +671,7 @@ export default function FeedScreen() {
         setCommentsForSheet([]);
       }
       if (requestedPostId === post.id) {
-        router.replace("/(app)");
+        router.replace("/feed");
       }
 
       const remainingCount = Math.max(0, postsRef.current.length - 1);
@@ -1782,7 +1782,7 @@ export default function FeedScreen() {
           </Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push("/(app)/upload")}
+            onPress={() => router.push("/upload")}
             style={styles.overlayButton}
           >
             <Text style={styles.overlayButtonText}>Upload a post</Text>
@@ -1847,7 +1847,7 @@ export default function FeedScreen() {
                   openGradeSheet(item.id);
                 }}
                 onOpenProfile={() => {
-                  router.push(`/(app)/profile/${item.creator_id}`);
+                  router.push(`/profile/${item.creator_id}`);
                 }}
                 onReportPost={() => {
                   openReportComposer({

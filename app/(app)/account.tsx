@@ -642,7 +642,7 @@ export default function AccountScreen() {
                 onPress={() => {
                   router.push({
                     params: { postId: fit.id },
-                    pathname: "/(app)",
+                    pathname: "/feed",
                   });
                 }}
               />
@@ -689,7 +689,7 @@ export default function AccountScreen() {
 
               <View style={styles.menuActionStack}>
                 {user?.id ? (
-                  <Link asChild href={`/(app)/profile/${user.id}`}>
+                  <Link asChild href={`/profile/${user.id}`}>
                     <Pressable style={styles.menuActionItem}>
                       <View>
                         <Text style={styles.menuActionTitle}>View public profile</Text>
@@ -733,7 +733,7 @@ export default function AccountScreen() {
                 </Pressable>
 
                 {canReviewReports ? (
-                  <Link asChild href="/(app)/moderation/reports">
+                  <Link asChild href="/moderation/reports">
                     <Pressable style={styles.menuActionItem}>
                       <View>
                         <Text style={styles.menuActionTitle}>Reports review</Text>

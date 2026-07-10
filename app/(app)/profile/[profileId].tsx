@@ -353,7 +353,7 @@ export default function ProfileScreen() {
                   </Text>
                 </Pressable>
               ) : (
-                <Link asChild href="/(app)/account">
+                <Link asChild href="/account">
                   <Pressable style={styles.followingButton}>
                     <Text style={[styles.followButtonText, styles.followingButtonText]}>
                       Open Account
@@ -387,7 +387,7 @@ export default function ProfileScreen() {
                   onPress={() => {
                     router.push({
                       params: { creatorId: targetProfileId, postId: fit.id },
-                      pathname: "/(app)",
+                      pathname: "/feed",
                     });
                   }}
                 />

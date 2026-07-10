@@ -21,6 +21,7 @@ Later behavior changes:
 ### profiles
 - `id uuid` primary key, references `auth.users(id)` on delete cascade
 - `username text` unique, length 3..30
+  - new rows/updates are constrained to lowercase letters, numbers, periods, and underscores
 - `avatar_url text` nullable, must be `http/https` if present
 - `bio text` nullable
 - `created_at timestamptz` default `now()`
@@ -195,6 +196,10 @@ Later behavior changes:
    - `tag_reveals unique(post_id, user_id, session_id)`
 12. Watch analytics guard:
    - `post_watches.watch_ms check (watch_ms >= 1000)`
+13. Username registration + profile creation:
+   - `public.is_valid_username(text)` constrains new/updated usernames to the supported handle format
+   - an `auth.users` insert trigger creates the matching `profiles` row during registration
+   - the trigger uses the requested signup username when present, otherwise falls back to a generated default handle
 
 ## RLS Summary
 RLS is enabled on:

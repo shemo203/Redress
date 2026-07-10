@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { supabase } from "../../lib/supabaseClient";
+import { buildDefaultUsername, isUsernameValid, normalizeUsername } from "../../utils";
 
 type Profile = {
   avatar_url: string | null;
@@ -27,34 +28,57 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-function buildDefaultUsername(user: User): string {
-  const rawPrefix = user.email?.split("@")[0] ?? "user";
-  const cleanPrefix = rawPrefix.toLowerCase().replace(/[^a-z0-9_]/g, "");
-  const safePrefix = cleanPrefix.length >= 3 ? cleanPrefix : "user";
-  const suffix = user.id.replace(/-/g, "").slice(0, 6);
-  return `${safePrefix.slice(0, 23)}_${suffix}`.slice(0, 30);
-}
+async function ensureProfileForUser(user: User): Promise<Profile> {
+  const { data: existingProfile, error: existingProfileError } = await supabase
+    .from("profiles")
+    .select("id, username, avatar_url")
+    .eq("id", user.id)
+    .maybeSingle();
 
-async function upsertProfileForUser(user: User): Promise<Profile> {
-  const username = buildDefaultUsername(user);
+  if (existingProfileError) {
+    throw existingProfileError;
+  }
+
+  if (existingProfile) {
+    return existingProfile;
+  }
+
+  const metadataUsername =
+    typeof user.user_metadata?.username === "string"
+      ? normalizeUsername(user.user_metadata.username)
+      : "";
+  const username = isUsernameValid(metadataUsername)
+    ? metadataUsername
+    : buildDefaultUsername(user.id, user.email);
   const { data, error } = await supabase
     .from("profiles")
-    .upsert(
-      {
-        id: user.id,
-        updated_at: new Date().toISOString(),
-        username,
-      },
-      { onConflict: "id" }
-    )
+    .insert({
+      id: user.id,
+      updated_at: new Date().toISOString(),
+      username,
+    })
     .select("id, username, avatar_url")
     .single();
 
-  if (error) {
-    throw error;
+  if (!error) {
+    return data;
   }
 
-  return data;
+  if (error.code === "23505") {
+    const { data: racedProfile, error: racedProfileError } = await supabase
+      .from("profiles")
+      .select("id, username, avatar_url")
+      .eq("id", user.id)
+      .single();
+
+    if (racedProfileError) {
+      throw racedProfileError;
+    }
+
+    return racedProfile;
+  }
+
+  throw error;
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -145,14 +169,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const run = async () => {
       try {
-        const nextProfile = await upsertProfileForUser(currentUser);
+        const nextProfile = await ensureProfileForUser(currentUser);
         if (!isCancelled) {
           setProfile(nextProfile);
           lastUpsertedUserId.current = currentUserId;
         }
       } catch (error) {
         if (!isCancelled) {
-          console.error("Failed to upsert profile", error);
+          console.error("Failed to ensure profile", error);
         }
       }
     };

@@ -48,7 +48,7 @@ export function TopListScreen() {
     (postId: string) => {
       router.push({
         params: { postId },
-        pathname: "/(app)",
+        pathname: "/feed",
       });
     },
     [router]
@@ -60,11 +60,11 @@ export function TopListScreen() {
     }
 
     if (hasPublishedFits) {
-      router.push("/(app)/account");
+      router.push("/account");
       return;
     }
 
-    router.push("/(app)/upload");
+    router.push("/upload");
   }, [hasPublishedFits, router, user?.id]);
 
   const loadTopList = useCallback(
@@ -189,7 +189,7 @@ export function TopListScreen() {
           <Text style={styles.stateText}>
             Be the first to publish and get rated.
           </Text>
-          <Pressable onPress={() => router.push("/(app)/upload")} style={styles.primaryButton}>
+          <Pressable onPress={() => router.push("/upload")} style={styles.primaryButton}>
             <Text style={styles.primaryButtonText}>Add fit</Text>
           </Pressable>
         </GlassCard>

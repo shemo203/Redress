@@ -5,6 +5,7 @@ Ship the MVP for an Expo client backed by Supabase.
 
 ## Core Rules
 - Authentication is required.
+- Registration collects a username up front and uses it as the user's public `@handle`.
 - Publishing a post requires at least one tag.
 - Publishing a draft is atomic and must go through `publish_post(post_id)` checks.
 - Grades are whole numbers from 1 to 10.
@@ -82,6 +83,7 @@ Ship the MVP for an Expo client backed by Supabase.
 ## Profile MVP Rules
 - The signed-in profile supports updating the profile photo from the device photo library.
 - The signed-in profile supports updating the profile description/bio.
+- Usernames are chosen during registration and used as the public identity across feed, search, comments, Top List, and profiles.
 - Profile bios on account/public profile surfaces should be expandable when the text is longer than the collapsed preview.
 - Profile bios are optional and should not fall back to seeded placeholder copy when unset.
 - Profile photo uploads reuse the existing authenticated storage path and update `profiles.avatar_url`.
@@ -97,6 +99,9 @@ Ship the MVP for an Expo client backed by Supabase.
 - These input surfaces should dismiss the keyboard cleanly via tap-outside, scrolling, or submit behavior, without blocking buttons or scrolling.
 - Comment and report sheets should close back to the underlying screen when the user taps outside the panel.
 - The shared report composer should follow the same keyboard-safe pattern so the details field stays visible while typing.
+
+## Auth Navigation
+- The forgot-password screen should always provide a visible exit path back to sign-in, even when it was opened without a usable back-stack history.
 
 ## Q5 Tag URL Rule
 - If `EXPO_PUBLIC_REQUIRE_TAG_URLS=true`:

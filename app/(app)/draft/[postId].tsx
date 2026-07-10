@@ -527,7 +527,7 @@ export default function DraftPostScreen() {
         {post.status === "published" ? (
           <View style={[chrome.glassCardSoft, styles.feedbackCard]}>
             <Text style={styles.feedbackText}>This post is live. You can head back to the feed now.</Text>
-            <Link href="/(app)" style={styles.feedLink}>
+            <Link href="/feed" style={styles.feedLink}>
               Back to feed
             </Link>
           </View>

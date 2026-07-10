@@ -1,4 +1,4 @@
-import { Slot } from "expo-router";
+import { Stack } from "expo-router";
 
 import * as Sentry from "@sentry/react-native";
 import { AuthProvider } from "../src/features/auth";
@@ -19,7 +19,7 @@ Sentry.init({
 export default Sentry.wrap(function RootLayout() {
   return (
     <AuthProvider>
-      <Slot />
+      <Stack screenOptions={{ headerShown: false }} />
     </AuthProvider>
   );
 });

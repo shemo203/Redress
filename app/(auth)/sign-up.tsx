@@ -4,16 +4,25 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { PRIVACY_URL, TERMS_URL, theme } from "../../src/constants";
 import { supabase } from "../../src/lib/supabaseClient";
+import {
+  getUsernameValidationMessage,
+  normalizeUsername,
+  USERNAME_MAX_LENGTH,
+} from "../../src/utils";
 
 export default function SignUpScreen() {
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isAgeConfirmed, setIsAgeConfirmed] = useState(false);
   const [isTermsAccepted, setIsTermsAccepted] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const normalizedUsername = normalizeUsername(username);
+  const usernameValidationMessage = getUsernameValidationMessage(username);
 
   const canSubmit =
+    !usernameValidationMessage &&
     email.trim().length > 0 &&
     password.length >= 6 &&
     isAgeConfirmed &&
@@ -21,6 +30,11 @@ export default function SignUpScreen() {
 
   const handleSignUp = async () => {
     setStatusMessage(null);
+    if (usernameValidationMessage) {
+      setStatusMessage(usernameValidationMessage);
+      return;
+    }
+
     if (!canSubmit) {
       setStatusMessage(
         "Complete all fields, confirm 13+, and accept Terms & Privacy."
@@ -32,21 +46,61 @@ export default function SignUpScreen() {
     const { error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
+      options: {
+        data: {
+          username: normalizedUsername,
+        },
+      },
     });
     setIsSubmitting(false);
 
     if (error) {
+      const normalizedMessage = error.message.toLowerCase();
+
+      if (
+        normalizedMessage.includes("username is already taken") ||
+        normalizedMessage.includes("profiles_username_key") ||
+        (normalizedMessage.includes("duplicate key value") &&
+          normalizedMessage.includes("username"))
+      ) {
+        setStatusMessage("That username is already taken.");
+        return;
+      }
+
+      if (normalizedMessage.includes("username must be 3 to 30 characters")) {
+        setStatusMessage(
+          "Usernames must be 3 to 30 characters and use only lowercase letters, numbers, periods, or underscores."
+        );
+        return;
+      }
+
       setStatusMessage(error.message);
       return;
     }
 
     setStatusMessage("Sign-up complete. Check email if confirmation is enabled.");
-    router.replace("/(auth)/sign-in");
+    router.replace("/sign-in");
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Create account</Text>
+
+      <Text style={styles.label}>Username</Text>
+      <TextInput
+        autoCapitalize="none"
+        autoComplete="username"
+        autoCorrect={false}
+        maxLength={USERNAME_MAX_LENGTH}
+        onChangeText={setUsername}
+        placeholder="yourname"
+        style={styles.input}
+        textContentType="username"
+        value={username}
+      />
+      <Text style={styles.helperText}>
+        Lowercase letters, numbers, periods, and underscores only.
+      </Text>
 
       <Text style={styles.label}>Email</Text>
       <TextInput
@@ -115,7 +169,7 @@ export default function SignUpScreen() {
 
       <View style={styles.linkRow}>
         <Text>Already have an account? </Text>
-        <Link href="/(auth)/sign-in" style={styles.linkText}>
+        <Link href="/sign-in" style={styles.linkText}>
           Sign in
         </Link>
       </View>
@@ -148,6 +202,11 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: "#cc9b95",
+  },
+  helperText: {
+    color: theme.color.inkSoft,
+    fontSize: 13,
+    marginTop: -4,
   },
   input: {
     backgroundColor: theme.color.bgPanel,

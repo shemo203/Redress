@@ -578,11 +578,11 @@ export default function UploadScreen() {
             </Text>
             <Text style={styles.feedbackText}>{submitResult.message}</Text>
             {submitResult.status === "published" ? (
-              <Link href="/(app)" style={styles.resultLink}>
+              <Link href="/feed" style={styles.resultLink}>
                 Go to feed
               </Link>
             ) : (
-              <Link href={`/(app)/draft/${submitResult.postId}`} style={styles.resultLink}>
+              <Link href={`/draft/${submitResult.postId}`} style={styles.resultLink}>
                 Open draft editor
               </Link>
             )}

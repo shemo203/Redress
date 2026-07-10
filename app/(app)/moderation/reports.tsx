@@ -113,7 +113,7 @@ export default function ReportsReviewScreen() {
   };
 
   if (!user || !isModerationAdminUser(user.id)) {
-    return <Redirect href="/(app)/account" />;
+    return <Redirect href="/account" />;
   }
 
   return (

@@ -45,7 +45,7 @@ export function LegalDocumentScreen({
           <Text style={styles.backText}>Back</Text>
         </Pressable>
 
-        <Link href="/(auth)/sign-up" style={styles.signUpLink}>
+        <Link href="/sign-up" style={styles.signUpLink}>
           Create account
         </Link>
       </View>

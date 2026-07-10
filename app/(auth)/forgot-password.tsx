@@ -1,20 +1,32 @@
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import * as Linking from "expo-linking";
 
 import { theme } from "../../src/constants";
 import { supabase } from "../../src/lib/supabaseClient";
+import { chrome } from "../../src/ui/chrome";
 
 export default function ForgotPasswordScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/sign-in");
+  };
 
   const handleResetPassword = async () => {
     setStatusMessage(null);
     setIsSubmitting(true);
 
-    const redirectTo = Linking.createURL("/(auth)/sign-in");
+    const redirectTo = Linking.createURL("/sign-in");
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo,
     });
@@ -31,6 +43,12 @@ export default function ForgotPasswordScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.headerRow}>
+        <Pressable onPress={handleBack} style={chrome.headerButton}>
+          <Text style={chrome.headerButtonText}>Back</Text>
+        </Pressable>
+      </View>
+
       <Text style={styles.title}>Reset password</Text>
       <Text style={styles.copy}>
         Enter your email and we will send a reset link.
@@ -82,6 +100,10 @@ const styles = StyleSheet.create({
   copy: {
     color: theme.color.muted,
     fontSize: 15,
+  },
+  headerRow: {
+    alignItems: "flex-start",
+    marginBottom: 4,
   },
   input: {
     backgroundColor: theme.color.bgPanel,

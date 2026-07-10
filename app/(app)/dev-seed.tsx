@@ -13,7 +13,7 @@ const STEPS = [
 
 export default function DevSeedScreen() {
   if (!DEV_SEED_ENABLED) {
-    return <Redirect href="/(app)/account" />;
+    return <Redirect href="/account" />;
   }
 
   return (
@@ -52,7 +52,7 @@ export default function DevSeedScreen() {
         <Text style={styles.cardCopy}>
           Seed SQL file: `supabase/seed.sql`
         </Text>
-        <Link href="/(app)/account" style={styles.inlineLink}>
+        <Link href="/account" style={styles.inlineLink}>
           Back to Account
         </Link>
       </View>
