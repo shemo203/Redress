@@ -1,0 +1,1 @@
+export const CREATE_POST_MEDIA_ASPECT_RATIO = 16 / 9;

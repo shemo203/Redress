@@ -2,8 +2,9 @@ import { VideoView, useVideoPlayer } from "expo-video";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { GlassButton } from "../../ui";
 import { theme } from "../../constants";
+import { GlassButton } from "../../ui";
+import { CREATE_POST_MEDIA_ASPECT_RATIO } from "./layout";
 
 type PreviewItem = {
   id: string;
@@ -197,8 +198,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(8,6,5,0.92)",
     borderBottomWidth: 1,
     borderColor: "rgba(255,250,246,0.08)",
-    height: 420,
+    aspectRatio: CREATE_POST_MEDIA_ASPECT_RATIO,
     overflow: "hidden",
+    width: "100%",
   },
   metaLabel: {
     color: "rgba(255,250,246,0.72)",

@@ -22,7 +22,8 @@ Ship the MVP for an Expo client backed by Supabase.
 - Image posts now open a lightweight native crop step immediately after image selection.
 - The image crop step uses a consistent `2:3` post frame so the cropped result preserves more full-body outfit framing while staying consistent across the app's image-post presentation.
 - The create-post screen should offer a simple full-post preview before publishing so creators can check the selected media, caption, and clothing tags together.
-- The publish CTA sits directly in the create flow under the items section instead of floating over the screen.
+- The create-post selected media preview should use a stable 16:9 frame for photos and videos so creators can inspect media without square presentation.
+- The publish CTA stays persistently reachable in the create flow, using the same publish eligibility rules while avoiding bottom dock and keyboard obstruction.
 - The upload and draft editor surfaces now use the same guided three-step framing:
   - `Draft`
   - `Tags`

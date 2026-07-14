@@ -28,6 +28,7 @@ import {
 import { useAuth } from "../../src/features/auth";
 import {
   CreatePostPreviewModal,
+  CREATE_POST_MEDIA_ASPECT_RATIO,
   createId,
   createImagePostPickerOptions,
   formatBytes,
@@ -443,39 +444,41 @@ export default function UploadScreen() {
         </View>
 
         <GlassCard onPress={openMediaPicker} style={styles.previewCard}>
-          {pickedMedia ? (
-            <>
-              {pickedMedia.mediaType === "image" ? (
-                <Image resizeMode="cover" source={{ uri: pickedMedia.uri }} style={styles.previewMedia} />
+          <View style={styles.previewMediaFrame}>
+            {pickedMedia ? (
+              pickedMedia.mediaType === "image" ? (
+                <Image resizeMode="contain" source={{ uri: pickedMedia.uri }} style={styles.previewMedia} />
               ) : (
                 <VideoView
-                  contentFit="cover"
+                  contentFit="contain"
                   nativeControls={false}
                   player={previewPlayer}
                   style={styles.previewMedia}
                 />
-              )}
+              )
+            ) : (
+              <View style={styles.previewEmptyState}>
+                <View style={styles.previewBadge}>
+                  <Text style={styles.previewBadgePlus}>+</Text>
+                </View>
+                <Text style={styles.previewEmptyTitle}>Choose your cover media</Text>
+                <Text style={styles.previewEmptyCopy}>
+                  Pick a photo or video. Photos open a quick crop step before upload.
+                </Text>
+              </View>
+            )}
+          </View>
 
-              <View style={styles.previewMetaRow}>
-                <Text numberOfLines={1} style={styles.previewMetaText}>
-                  {pickedMedia.fileName ?? (pickedMedia.mediaType === "image" ? "Photo" : "Video")}
-                </Text>
-                <Text style={styles.previewMetaPill}>
-                  {pickedMedia.fileSize ? formatBytes(pickedMedia.fileSize) : "Media ready"}
-                </Text>
-              </View>
-            </>
-          ) : (
-            <View style={styles.previewEmptyState}>
-              <View style={styles.previewBadge}>
-                <Text style={styles.previewBadgePlus}>+</Text>
-              </View>
-              <Text style={styles.previewEmptyTitle}>Choose your cover media</Text>
-              <Text style={styles.previewEmptyCopy}>
-                Pick a photo or video. Photos open a quick crop step before upload.
+          {pickedMedia ? (
+            <View style={styles.previewMetaRow}>
+              <Text numberOfLines={1} style={styles.previewMetaText}>
+                {pickedMedia.fileName ?? (pickedMedia.mediaType === "image" ? "Photo" : "Video")}
+              </Text>
+              <Text style={styles.previewMetaPill}>
+                {pickedMedia.fileSize ? formatBytes(pickedMedia.fileSize) : "Media ready"}
               </Text>
             </View>
-          )}
+          ) : null}
         </GlassCard>
 
         {pickedMedia ? (
@@ -551,18 +554,6 @@ export default function UploadScreen() {
             <Text style={styles.addItemInnerText}>＋</Text>
             <Text style={styles.addItemInnerLabel}>Add clothing</Text>
           </GlassButton>
-
-          <View style={styles.publishSection}>
-            <Text style={styles.publishHint}>{publishHint}</Text>
-            <GlassButton
-              disabled={!canPublish}
-              minHeight={50}
-              onPress={() => void submitPost("published")}
-              style={styles.publishButton}
-            >
-              {submitMode === "published" ? "Publishing..." : "Publish Look"}
-            </GlassButton>
-          </View>
         </View>
 
         {statusMessage ? (
@@ -589,6 +580,23 @@ export default function UploadScreen() {
           </GlassCard>
         ) : null}
       </ScrollView>
+
+      <View
+        style={[
+          styles.publishFooter,
+          { paddingBottom: Math.max(insets.bottom + 10, 18) },
+        ]}
+      >
+        <Text style={styles.publishHint}>{publishHint}</Text>
+        <GlassButton
+          disabled={!canPublish}
+          minHeight={50}
+          onPress={() => void submitPost("published")}
+          style={styles.publishButton}
+        >
+          {submitMode === "published" ? "Publishing..." : "Publish Look"}
+        </GlassButton>
+      </View>
 
       <CreatePostPreviewModal
         caption={caption}
@@ -959,9 +967,9 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
   previewCard: {
-    minHeight: 280,
     overflow: "hidden",
     padding: 0,
+    width: "100%",
   },
   previewActionButton: {
     flex: 1,
@@ -987,8 +995,8 @@ const styles = StyleSheet.create({
   },
   previewEmptyState: {
     alignItems: "center",
+    flex: 1,
     justifyContent: "center",
-    minHeight: 280,
     paddingHorizontal: 24,
   },
   previewEmptyTitle: {
@@ -1000,7 +1008,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   previewMedia: {
-    height: 280,
+    height: "100%",
+    width: "100%",
+  },
+  previewMediaFrame: {
+    aspectRatio: CREATE_POST_MEDIA_ASPECT_RATIO,
+    backgroundColor: "rgba(8,6,5,0.08)",
     width: "100%",
   },
   previewMetaPill: {
@@ -1018,14 +1031,10 @@ const styles = StyleSheet.create({
   previewMetaRow: {
     alignItems: "center",
     backgroundColor: "rgba(247, 241, 232, 0.78)",
-    bottom: 0,
     flexDirection: "row",
     justifyContent: "space-between",
-    left: 0,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    position: "absolute",
-    right: 0,
   },
   previewMetaText: {
     color: theme.color.sepia,
@@ -1042,8 +1051,13 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     textAlign: "center",
   },
-  publishSection: {
-    marginTop: 24,
+  publishFooter: {
+    backgroundColor: "rgba(247, 241, 232, 0.96)",
+    borderColor: "rgba(209,188,164,0.72)",
+    borderTopWidth: 1,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   resultLink: {
     color: theme.color.sepia,
